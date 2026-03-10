@@ -72,6 +72,7 @@ export function BookingForm({ room, session }: BookingFormProps) {
   const [attendees, setAttendees] = useState<DirectoryUser[]>([]);
   const [attendeesLoading, setAttendeesLoading] = useState(false);
   const [selectedAttendeeEmails, setSelectedAttendeeEmails] = useState<Set<string>>(new Set());
+  const [attendeeSearch, setAttendeeSearch] = useState("");
   const [status, setStatus] = useState<SubmitStatus>("idle");
 
   const dateStr = useMemo(() => toDateString(selectedDate), [selectedDate]);
@@ -375,8 +376,26 @@ export function BookingForm({ room, session }: BookingFormProps) {
                 No directory list. Add User.Read.All permission and admin consent to show colleagues.
               </p>
             ) : (
-              <div className="mt-2 max-h-36 overflow-y-auto rounded-lg border border-border p-2 space-y-1">
-                {attendees.slice(0, 100).map((u) => {
+              <>
+                <Input
+                  type="search"
+                  placeholder="Search by name or email"
+                  value={attendeeSearch}
+                  onChange={(e) => setAttendeeSearch(e.target.value)}
+                  className="mt-2 min-h-[40px]"
+                  disabled={status === "submitting"}
+                  aria-label="Search invite list by name or email"
+                />
+                <div className="mt-2 max-h-36 overflow-y-auto rounded-lg border border-border p-2 space-y-1">
+                  {attendees
+                    .filter(
+                      (u) =>
+                        !attendeeSearch.trim() ||
+                        u.displayName.toLowerCase().includes(attendeeSearch.trim().toLowerCase()) ||
+                        u.mail.toLowerCase().includes(attendeeSearch.trim().toLowerCase())
+                    )
+                    .slice(0, 100)
+                    .map((u) => {
                   const isSelected = selectedAttendeeEmails.has(u.mail);
                   return (
                     <button
@@ -401,7 +420,8 @@ export function BookingForm({ room, session }: BookingFormProps) {
                     </button>
                   );
                 })}
-              </div>
+                </div>
+              </>
             )}
           </div>
 

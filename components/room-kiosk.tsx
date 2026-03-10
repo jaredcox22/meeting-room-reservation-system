@@ -78,6 +78,12 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
   }, [mounted, fetchSchedule]);
 
   useEffect(() => {
+    if (!mounted) return;
+    const id = setInterval(() => fetchSchedule(), 60 * 1000);
+    return () => clearInterval(id);
+  }, [mounted, fetchSchedule]);
+
+  useEffect(() => {
     if (typeof window !== "undefined") {
       const base =
         typeof process.env.NEXT_PUBLIC_APP_URL === "string" &&
@@ -211,12 +217,9 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="px-4 sm:px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-2 min-w-0">
+      <footer className="px-4 sm:px-6 py-3 border-t border-border flex items-center min-w-0">
         <p className="text-xs text-muted-foreground truncate min-w-0">
           Synced with Microsoft 365
-        </p>
-        <p className="text-xs text-muted-foreground shrink-0">
-          Floor 3 · Building A
         </p>
       </footer>
     </div>

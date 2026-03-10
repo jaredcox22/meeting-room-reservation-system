@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import { formatTime12h } from "@/lib/time";
 import type { TimeSlot, SlotsResponse } from "@/lib/api-types";
 
@@ -34,6 +35,7 @@ export function QuickBook({ roomSlug, options, minutesUntilNext }: QuickBookProp
   const [users, setUsers] = useState<DirectoryUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
+  const [participantSearch, setParticipantSearch] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const dateStr = useMemo(() => toDateString(selectedDate), [selectedDate]);
@@ -249,11 +251,27 @@ export function QuickBook({ roomSlug, options, minutesUntilNext }: QuickBookProp
             <p className="text-sm text-muted-foreground">Loading participants…</p>
           ) : (
             <>
+              <Input
+                type="search"
+                placeholder="Search by name or email"
+                value={participantSearch}
+                onChange={(e) => setParticipantSearch(e.target.value)}
+                className="min-h-[40px]"
+                aria-label="Search participants by name or email"
+              />
               <div className="max-h-36 overflow-y-auto flex flex-col gap-1.5">
-                {users.slice(0, 100).map((u) => {
-                  if (!u.mail) return null;
-                  const isSelected = selectedEmails.has(u.mail);
-                  return (
+                {users
+                  .filter(
+                    (u) =>
+                      u.mail &&
+                      (!participantSearch.trim() ||
+                        u.displayName.toLowerCase().includes(participantSearch.trim().toLowerCase()) ||
+                        u.mail.toLowerCase().includes(participantSearch.trim().toLowerCase()))
+                  )
+                  .slice(0, 100)
+                  .map((u) => {
+                    const isSelected = selectedEmails.has(u.mail!);
+                    return (
                     <button
                       key={u.id}
                       type="button"
@@ -267,8 +285,8 @@ export function QuickBook({ roomSlug, options, minutesUntilNext }: QuickBookProp
                       <span className="truncate">{u.displayName}</span>
                       <span className="text-muted-foreground text-xs truncate shrink-0 max-w-[120px]">{u.mail}</span>
                     </button>
-                  );
-                })}
+                    );
+                  })}
               </div>
               {users.length === 0 && <p className="text-sm text-muted-foreground">No users loaded. You can still book without participants.</p>}
               <div className="flex gap-2 pt-1">
