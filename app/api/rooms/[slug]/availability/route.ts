@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getRoomBySlug } from "@/lib/rooms";
 import { getMockSchedule } from "@/lib/mock-schedule";
+import { getRoomAvailability, isGraphConfigured } from "@/lib/graph";
 import { getAvailability } from "@/lib/availability";
+import { getDayBounds, minutesSinceMidnight } from "@/lib/time";
 import type { AvailabilityResponse } from "@/lib/api-types";
 
 type RouteParams = { params: Promise<{ slug: string }> };
@@ -12,9 +14,25 @@ export async function GET(_request: Request, { params }: RouteParams) {
   if (!room) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const meetings = getMockSchedule(slug);
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const body: AvailabilityResponse = getAvailability(meetings, nowMinutes);
+
+  let body: AvailabilityResponse;
+  if (!isGraphConfigured()) {
+    const meetings = getMockSchedule(slug);
+    const now = new Date();
+    const nowMinutes = minutesSinceMidnight(now);
+    body = getAvailability(meetings, nowMinutes);
+  } else {
+    try {
+      const { start, end } = getDayBounds(new Date());
+      body = await getRoomAvailability(room.email, start, end);
+    } catch (err) {
+      console.warn("[availability] using mock data (Graph failed):", err);
+      const meetings = getMockSchedule(slug);
+      const now = new Date();
+      const nowMinutes = minutesSinceMidnight(now);
+      body = getAvailability(meetings, nowMinutes);
+    }
+  }
+
   return NextResponse.json(body);
 }

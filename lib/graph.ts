@@ -6,22 +6,116 @@
 
 import type { Meeting } from "@/components/kiosk/types";
 import type { AvailabilityResponse } from "@/lib/api-types";
+import { getAvailability } from "@/lib/availability";
+import { minutesSinceMidnight, formatTime12h } from "@/lib/time";
 
 const GRAPH_NOT_CONFIGURED = "Microsoft Graph not configured";
 
-function isGraphConfigured(): boolean {
-  return process.env.MICROSOFT_GRAPH_ENABLED === "true" && !!process.env.AZURE_CLIENT_ID;
+const TOKEN_URL = (tenantId: string) =>
+  `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
+
+let tokenCache: { token: string; expiresAt: number } | null = null;
+const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+
+export function isGraphConfigured(): boolean {
+  return (
+    process.env.MICROSOFT_GRAPH_ENABLED === "true" &&
+    !!process.env.AZURE_CLIENT_ID &&
+    !!process.env.AZURE_TENANT_ID &&
+    !!process.env.AZURE_CLIENT_SECRET
+  );
+}
+
+/**
+ * Get an app-only (client credentials) access token for Microsoft Graph.
+ * Cached in memory; refreshed when expired or within 5 minutes of expiry.
+ */
+export async function getGraphAccessToken(): Promise<string> {
+  const tenantId = process.env.AZURE_TENANT_ID;
+  const clientId = process.env.AZURE_CLIENT_ID;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error(
+      "[graph] getGraphAccessToken failed: missing AZURE_TENANT_ID, AZURE_CLIENT_ID, or AZURE_CLIENT_SECRET"
+    );
+  }
+
+  const now = Date.now();
+  if (tokenCache && tokenCache.expiresAt > now + EXPIRY_BUFFER_MS) {
+    return tokenCache.token;
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: "https://graph.microsoft.com/.default",
+  });
+
+  const res = await fetch(TOKEN_URL(tenantId), {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[graph] getGraphAccessToken failed:", res.status, text);
+    throw new Error(`[graph] getGraphAccessToken failed: ${res.status}`);
+  }
+
+  const data = (await res.json()) as { access_token: string; expires_in: number };
+  const expiresInMs = (data.expires_in ?? 3600) * 1000;
+  tokenCache = {
+    token: data.access_token,
+    expiresAt: now + expiresInMs,
+  };
+  return tokenCache.token;
+}
+
+interface GraphEvent {
+  id?: string;
+  subject?: string;
+  start?: { dateTime?: string; timeZone?: string };
+  end?: { dateTime?: string; timeZone?: string };
+  organizer?: { emailAddress?: { name?: string; address?: string } };
+}
+
+function mapGraphEventToMeeting(ev: GraphEvent): Meeting | null {
+  const startDateTime = ev.start?.dateTime;
+  const endDateTime = ev.end?.dateTime;
+  if (!startDateTime || !endDateTime) return null;
+
+  const startDate = new Date(startDateTime);
+  const endDate = new Date(endDateTime);
+
+  const organizer =
+    ev.organizer?.emailAddress?.name ||
+    ev.organizer?.emailAddress?.address ||
+    "Unknown";
+
+  return {
+    id: ev.id ?? crypto.randomUUID(),
+    subject: ev.subject ?? "(No title)",
+    organizer,
+    startTime: formatTime12h(startDate),
+    endTime: formatTime12h(endDate),
+    startMinutes: minutesSinceMidnight(startDate),
+    endMinutes: minutesSinceMidnight(endDate),
+  };
 }
 
 /**
  * Get calendar view for a room mailbox (events in the given time range).
- * Phase 6: call Graph API /users/{roomEmail}/calendarView with start and end.
- * @returns List of meetings in the app's Meeting shape (id, subject, organizer, startTime, endTime, startMinutes, endMinutes).
+ * Returns list of meetings in the app's Meeting shape.
+ * On failure or not configured, returns [] and logs.
  */
 export async function getRoomCalendarView(
-  _roomEmail: string,
-  _start: Date,
-  _end: Date
+  roomEmail: string,
+  start: Date,
+  end: Date
 ): Promise<Meeting[]> {
   if (!isGraphConfigured()) {
     if (process.env.NODE_ENV === "development") {
@@ -29,35 +123,79 @@ export async function getRoomCalendarView(
     }
     return [];
   }
-  throw new Error(GRAPH_NOT_CONFIGURED);
+
+  try {
+    const token = await getGraphAccessToken();
+    const startIso = start.toISOString();
+    const endIso = end.toISOString();
+    const encodedEmail = encodeURIComponent(roomEmail);
+    const url = `${GRAPH_BASE}/users/${encodedEmail}/calendar/calendarView?startDateTime=${encodeURIComponent(startIso)}&endDateTime=${encodeURIComponent(endIso)}`;
+
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("[graph] getRoomCalendarView failed:", res.status, text);
+      return [];
+    }
+
+    const data = (await res.json()) as { value?: GraphEvent[] };
+    const events = data.value ?? [];
+    const meetings: Meeting[] = [];
+    for (const ev of events) {
+      const m = mapGraphEventToMeeting(ev);
+      if (m) meetings.push(m);
+    }
+    meetings.sort((a, b) => a.startMinutes - b.startMinutes);
+    return meetings;
+  } catch (err) {
+    console.error("[graph] getRoomCalendarView failed:", err);
+    return [];
+  }
 }
+
+const EMPTY_AVAILABILITY: AvailabilityResponse = {
+  status: "available",
+  label: "Available All Day",
+  currentMeeting: null,
+  nextMeeting: null,
+};
 
 /**
  * Get current availability for a room (status, current meeting, next meeting, label).
- * Phase 6: use getRoomCalendarView then derive availability with getAvailability() from lib/availability.
+ * Uses getRoomCalendarView then getAvailability with server's current time.
  */
 export async function getRoomAvailability(
-  _roomEmail: string,
-  _start: Date,
-  _end: Date
+  roomEmail: string,
+  start: Date,
+  end: Date
 ): Promise<AvailabilityResponse> {
   if (!isGraphConfigured()) {
     if (process.env.NODE_ENV === "development") {
       console.warn("[graph] " + GRAPH_NOT_CONFIGURED + "; returning empty availability.");
     }
-    return {
-      status: "available",
-      label: "Available All Day",
-      currentMeeting: null,
-      nextMeeting: null,
-    };
+    return EMPTY_AVAILABILITY;
   }
-  throw new Error(GRAPH_NOT_CONFIGURED);
+
+  try {
+    const meetings = await getRoomCalendarView(roomEmail, start, end);
+    const now = new Date();
+    const nowMinutes = minutesSinceMidnight(now);
+    return getAvailability(meetings, nowMinutes);
+  } catch (err) {
+    console.error("[graph] getRoomAvailability failed:", err);
+    return EMPTY_AVAILABILITY;
+  }
 }
 
 /**
  * Create a reservation (calendar event) for the room.
- * Phase 7: call Graph API to create event in room calendar; optionally set organizer and subject.
+ * Phase 7: call Graph API to create event in room calendar.
  */
 export async function createRoomReservation(
   _roomEmail: string,
