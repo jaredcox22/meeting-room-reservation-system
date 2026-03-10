@@ -1,7 +1,5 @@
-"use client";
-
-import RoomKiosk from "@/components/room-kiosk";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <RoomKiosk />;
+  redirect("/rooms/canvass");
 }

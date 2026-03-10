@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Room } from "@/lib/rooms";
 import { StatusCard } from "@/components/kiosk/status-card";
 import { MeetingCard } from "@/components/kiosk/meeting-card";
 import { QuickBook } from "@/components/kiosk/quick-book";
@@ -8,6 +9,10 @@ import { QRPanel } from "@/components/kiosk/qr-panel";
 import { ScheduleList } from "@/components/kiosk/schedule-list";
 import { RefreshIndicator } from "@/components/kiosk/refresh-indicator";
 import type { Meeting, RoomStatus } from "@/components/kiosk/types";
+
+interface RoomKioskProps {
+  room: Room;
+}
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
@@ -76,11 +81,12 @@ function getRoomStatus(
 
 // ─── Root Component ───────────────────────────────────────────────────────────
 
-export default function RoomKiosk() {
+export default function RoomKiosk({ room }: RoomKioskProps) {
   const [mounted, setMounted] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [bookingUrl, setBookingUrl] = useState<string | null>(null);
 
   // Initialize on mount to avoid hydration mismatch
   useEffect(() => {
@@ -88,6 +94,13 @@ export default function RoomKiosk() {
     setLastSynced(new Date());
     setMounted(true);
   }, []);
+
+  // Build full booking URL on client for QR panel
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setBookingUrl(`${window.location.origin}${room.bookingPath}`);
+    }
+  }, [room.bookingPath]);
 
   // Tick clock every second
   useEffect(() => {
@@ -145,10 +158,10 @@ export default function RoomKiosk() {
       <header className="flex items-start justify-between px-6 pt-6 pb-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground tracking-tight">
-            Canvass Room
+            {room.name}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            canvassroom@ircuwd.com
+            {room.email}
           </p>
         </div>
         <div className="text-right flex flex-col items-end gap-1">
@@ -191,7 +204,7 @@ export default function RoomKiosk() {
         {/* QR Code + Schedule side by side on larger screens */}
         <div className="grid grid-cols-5 gap-4">
           <div className="col-span-2">
-            <QRPanel />
+            <QRPanel bookingUrl={bookingUrl} />
           </div>
           <div className="col-span-3">
             <ScheduleList meetings={SCHEDULE} nowMinutes={nowMin} />

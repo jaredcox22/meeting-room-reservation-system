@@ -1,21 +1,26 @@
-export function QRPanel() {
+interface QRPanelProps {
+  /** Full URL for the room booking page; when present, can be shown or used for QR in Phase 2 */
+  bookingUrl?: string | null;
+}
+
+export function QRPanel({ bookingUrl = null }: QRPanelProps) {
   return (
     <div className="bg-card rounded-2xl border border-border shadow-sm p-5 flex flex-col items-center gap-4 h-full">
       <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground self-start">
         Book from Your Phone
       </p>
 
-      {/* QR code placeholder */}
+      {/* QR code placeholder (Phase 2: replace with real QR when bookingUrl is set) */}
       <div
         className="rounded-xl bg-secondary flex items-center justify-center w-36 h-36 shrink-0"
-        aria-label="QR code placeholder"
+        aria-label={bookingUrl ? "QR code for booking page" : "QR code placeholder"}
         role="img"
       >
         <QRCodeIcon className="w-24 h-24 text-muted-foreground opacity-50" />
       </div>
 
       <p className="text-xs text-center text-muted-foreground leading-relaxed">
-        Scan to open this room's booking page
+        Scan to open this room&apos;s booking page
       </p>
     </div>
   );
