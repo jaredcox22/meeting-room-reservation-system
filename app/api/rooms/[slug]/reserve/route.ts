@@ -33,7 +33,10 @@ function parseBody(body: unknown): ReserveRequest | null {
       : typeof o.startTime === "string"
         ? o.startTime.trim() || undefined
         : undefined;
-  return { durationMinutes: durationMinutes as number, title, startTime };
+  const attendeeEmails = Array.isArray(o.attendeeEmails)
+    ? (o.attendeeEmails as unknown[]).filter((e): e is string => typeof e === "string" && e.length > 0)
+    : undefined;
+  return { durationMinutes: durationMinutes as number, title, startTime, attendeeEmails };
 }
 
 function parseAndValidateStartTime(startTime: string): { start: Date } | { error: string } {
@@ -111,12 +114,18 @@ export async function POST(request: Request, { params }: RouteParams) {
         );
       }
 
+      const organizerEmail = session.user.email;
+      const allAttendees = [
+        organizerEmail,
+        ...(parsed.attendeeEmails ?? []).filter((e) => e !== organizerEmail),
+      ];
       const result = await createRoomReservation(
         room.email,
         start,
         end,
         parsed.title ?? "Quick booking",
-        session.user.email
+        organizerEmail,
+        allAttendees
       );
       eventId = result.eventId;
     } catch (err) {

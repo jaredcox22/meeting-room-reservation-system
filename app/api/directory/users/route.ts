@@ -7,6 +7,14 @@ export async function GET() {
     return NextResponse.json({ users });
   } catch (err) {
     console.error("[directory/users]", err);
-    return NextResponse.json({ error: "Failed to load users" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Failed to load users";
+    const status = message.includes("403") || message.includes("permission") ? 403 : 500;
+    return NextResponse.json(
+      {
+        error: "Failed to load users",
+        hint: message,
+      },
+      { status }
+    );
   }
 }

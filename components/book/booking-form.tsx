@@ -7,6 +7,13 @@ import type { Session } from "next-auth";
 import type { Room } from "@/lib/rooms";
 import type { TimeSlot, SlotsResponse } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+interface DirectoryUser {
+  id: string;
+  displayName: string;
+  mail: string;
+}
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
@@ -62,9 +69,21 @@ export function BookingForm({ room, session }: BookingFormProps) {
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
   const [title, setTitle] = useState("");
+  const [attendees, setAttendees] = useState<DirectoryUser[]>([]);
+  const [attendeesLoading, setAttendeesLoading] = useState(false);
+  const [selectedAttendeeEmails, setSelectedAttendeeEmails] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<SubmitStatus>("idle");
 
   const dateStr = useMemo(() => toDateString(selectedDate), [selectedDate]);
+
+  useEffect(() => {
+    setAttendeesLoading(true);
+    fetch("/api/directory/users")
+      .then((res) => (res.ok ? res.json() : { users: [] }))
+      .then((data: { users: DirectoryUser[] }) => setAttendees(data.users ?? []))
+      .catch(() => setAttendees([]))
+      .finally(() => setAttendeesLoading(false));
+  }, []);
 
   useEffect(() => {
     setSlotsLoading(true);
@@ -107,15 +126,25 @@ export function BookingForm({ room, session }: BookingFormProps) {
     return options;
   }, []);
 
+  function toggleAttendee(email: string) {
+    setSelectedAttendeeEmails((prev) => {
+      const next = new Set(prev);
+      if (next.has(email)) next.delete(email);
+      else next.add(email);
+      return next;
+    });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedSlot) return;
     setStatus("submitting");
-    const body: { durationMinutes: number; title?: string; startTime: string } = {
+    const body: { durationMinutes: number; title?: string; startTime: string; attendeeEmails?: string[] } = {
       durationMinutes,
       startTime: selectedSlot.start,
     };
     if (title.trim()) body.title = title.trim();
+    if (selectedAttendeeEmails.size > 0) body.attendeeEmails = Array.from(selectedAttendeeEmails);
     const res = await fetch(`/api/rooms/${room.slug}/reserve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -333,6 +362,47 @@ export function BookingForm({ room, session }: BookingFormProps) {
               className="mt-2 min-h-[44px]"
               disabled={status === "submitting"}
             />
+          </div>
+
+          <div role="group" aria-labelledby="attendees-label">
+            <Label id="attendees-label" className="text-base">
+              Invite people (optional)
+            </Label>
+            {attendeesLoading ? (
+              <p className="mt-2 text-sm text-muted-foreground">Loading…</p>
+            ) : attendees.length === 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No directory list. Add User.Read.All permission and admin consent to show colleagues.
+              </p>
+            ) : (
+              <div className="mt-2 max-h-36 overflow-y-auto rounded-lg border border-border p-2 space-y-1">
+                {attendees.slice(0, 100).map((u) => {
+                  const isSelected = selectedAttendeeEmails.has(u.mail);
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => toggleAttendee(u.mail)}
+                      className={cn(
+                        "w-full rounded-lg px-3 py-2 text-left text-sm flex items-center gap-2",
+                        isSelected ? "bg-primary/15 border border-primary/50" : "hover:bg-muted/50"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "size-4 rounded border flex shrink-0",
+                          isSelected ? "bg-primary border-primary" : "border-muted-foreground"
+                        )}
+                      />
+                      <span className="truncate">{u.displayName}</span>
+                      <span className="text-muted-foreground text-xs truncate shrink-0 max-w-[140px]">
+                        {u.mail}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {selectedSlot && (

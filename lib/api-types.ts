@@ -18,6 +18,8 @@ export interface ReserveRequest {
   title?: string;
   /** ISO date-time for start of reservation; if omitted, start is "now" */
   startTime?: string;
+  /** Additional attendee emails to invite (directory users). Organizer is always the signed-in user. */
+  attendeeEmails?: string[];
 }
 
 export interface TimeSlot {

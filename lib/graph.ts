@@ -11,6 +11,23 @@ import { minutesSinceMidnight, formatTime12h } from "@/lib/time";
 
 const GRAPH_NOT_CONFIGURED = "Microsoft Graph not configured";
 
+/** Format a Date in the given IANA timezone for Graph API (local time string). */
+function formatInTimeZone(date: Date, timeZone: string): string {
+  const f = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = f.formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}`;
+}
+
 const TOKEN_URL = (tenantId: string) =>
   `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
@@ -213,16 +230,16 @@ export async function createRoomReservation(
   const encodedEmail = encodeURIComponent(roomEmail);
   const url = `${GRAPH_BASE}/users/${encodedEmail}/calendar/events`;
 
+  const roomTimeZone = process.env.ROOM_TIMEZONE?.trim() || "UTC";
+  const useLocalTime = roomTimeZone !== "UTC";
   const body: Record<string, unknown> = {
     subject: subject ?? "Quick booking",
-    start: {
-      dateTime: start.toISOString(),
-      timeZone: "UTC",
-    },
-    end: {
-      dateTime: end.toISOString(),
-      timeZone: "UTC",
-    },
+    start: useLocalTime
+      ? { dateTime: formatInTimeZone(start, roomTimeZone), timeZone: roomTimeZone }
+      : { dateTime: start.toISOString(), timeZone: "UTC" },
+    end: useLocalTime
+      ? { dateTime: formatInTimeZone(end, roomTimeZone), timeZone: roomTimeZone }
+      : { dateTime: end.toISOString(), timeZone: "UTC" },
   };
 
   const attendeeEmails = Array.isArray(attendeeEmailsParam) && attendeeEmailsParam.length > 0
@@ -259,12 +276,13 @@ export async function createRoomReservation(
 export interface DirectoryUser {
   id: string;
   displayName: string;
-  mail: string | null;
+  mail: string;
 }
 
 /**
  * List users from Microsoft 365 directory (Entra ID).
- * Requires application permission User.Read.All (or User.ReadBasic.All).
+ * Requires application permission User.Read.All (or Directory.Read.All) and admin consent.
+ * Uses mail or userPrincipalName as the invite address.
  */
 export async function getDirectoryUsers(): Promise<DirectoryUser[]> {
   if (!isGraphConfigured()) {
@@ -272,7 +290,7 @@ export async function getDirectoryUsers(): Promise<DirectoryUser[]> {
   }
   try {
     const token = await getGraphAccessToken();
-    const url = `${GRAPH_BASE}/users?$select=id,displayName,mail&$top=500&$orderby=displayName`;
+    const url = `${GRAPH_BASE}/users?$select=id,displayName,mail,userPrincipalName&$top=500`;
     const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -280,19 +298,26 @@ export async function getDirectoryUsers(): Promise<DirectoryUser[]> {
       },
     });
     if (!res.ok) {
-      console.error("[graph] getDirectoryUsers failed:", res.status, await res.text());
+      const text = await res.text();
+      console.error("[graph] getDirectoryUsers failed:", res.status, text);
+      if (res.status === 403) {
+        throw new Error(
+          "User.Read.All or Directory.Read.All application permission is required, with admin consent. Some tenants also require allowedToReadOtherUsers in the authorization policy."
+        );
+      }
       return [];
     }
-    const data = (await res.json()) as { value?: Array<{ id?: string; displayName?: string; mail?: string | null }> };
+    const data = (await res.json()) as {
+      value?: Array<{ id?: string; displayName?: string; mail?: string | null; userPrincipalName?: string | null }>;
+    };
     const list = data.value ?? [];
     return list
-      .filter((u) => u.id && (u.mail || u.displayName))
+      .filter((u) => u.id && (u.mail || u.userPrincipalName))
       .map((u) => ({
         id: u.id!,
-        displayName: u.displayName ?? "",
-        mail: u.mail ?? null,
+        displayName: u.displayName ?? u.userPrincipalName ?? "",
+        mail: (u.mail ?? u.userPrincipalName) as string,
       }))
-      .filter((u) => u.mail)
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
   } catch (err) {
     console.error("[graph] getDirectoryUsers failed:", err);

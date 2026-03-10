@@ -257,7 +257,7 @@ export function QuickBook({ roomSlug, options, minutesUntilNext }: QuickBookProp
                     <button
                       key={u.id}
                       type="button"
-                      onClick={() => toggleUser(u.mail!)}
+                      onClick={() => toggleUser(u.mail)}
                       className={cn(
                         "rounded-lg px-3 py-2 text-left text-sm flex items-center gap-2",
                         isSelected ? "bg-primary/20 border border-primary" : "bg-secondary border border-transparent"
