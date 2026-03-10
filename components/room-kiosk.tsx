@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Room } from "@/lib/rooms";
+import { getMockSchedule } from "@/lib/mock-schedule";
 import { StatusCard } from "@/components/kiosk/status-card";
 import { MeetingCard } from "@/components/kiosk/meeting-card";
 import { QuickBook } from "@/components/kiosk/quick-book";
@@ -14,59 +15,22 @@ interface RoomKioskProps {
   room: Room;
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const ACTIVE_MEETING: Meeting = {
-  id: "1",
-  subject: "Q2 Brand Strategy Review",
-  organizer: "Sarah Mitchell",
-  startTime: "10:00 AM",
-  endTime: "11:00 AM",
-  startMinutes: 10 * 60,
-  endMinutes: 11 * 60,
-};
-
-const NEXT_MEETING: Meeting = {
-  id: "2",
-  subject: "Product Design Sync",
-  organizer: "James Okafor",
-  startTime: "11:30 AM",
-  endTime: "12:30 PM",
-  startMinutes: 11 * 60 + 30,
-  endMinutes: 12 * 60 + 30,
-};
-
-const SCHEDULE: Meeting[] = [
-  ACTIVE_MEETING,
-  NEXT_MEETING,
-  {
-    id: "3",
-    subject: "Engineering All-Hands",
-    organizer: "Priya Nair",
-    startTime: "1:00 PM",
-    endTime: "2:00 PM",
-    startMinutes: 13 * 60,
-    endMinutes: 14 * 60,
-  },
-  {
-    id: "4",
-    subject: "Client Onboarding — Apex Corp",
-    organizer: "Tom Reardon",
-    startTime: "2:30 PM",
-    endTime: "3:30 PM",
-    startMinutes: 14 * 60 + 30,
-    endMinutes: 15 * 60 + 30,
-  },
-  {
-    id: "5",
-    subject: "Weekly Retrospective",
-    organizer: "Alicia Chen",
-    startTime: "4:00 PM",
-    endTime: "4:45 PM",
-    startMinutes: 16 * 60,
-    endMinutes: 16 * 60 + 45,
-  },
-];
+function getCurrentAndNext(
+  schedule: Meeting[],
+  nowMinutes: number
+): { currentMeeting: Meeting | null; nextMeeting: Meeting | null } {
+  let currentMeeting: Meeting | null = null;
+  let nextMeeting: Meeting | null = null;
+  for (const m of schedule) {
+    if (m.startMinutes <= nowMinutes && nowMinutes < m.endMinutes) {
+      currentMeeting = m;
+    }
+    if (m.startMinutes > nowMinutes && !nextMeeting) {
+      nextMeeting = m;
+    }
+  }
+  return { currentMeeting, nextMeeting };
+}
 
 function getRoomStatus(
   now: Date,
@@ -117,24 +81,30 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
     }, 1200);
   }
 
-  // Quick-book slots (in minutes)
-  const BOOK_OPTIONS = [15, 30, 45, 60];
+  const schedule = useMemo(() => getMockSchedule(room.slug), [room.slug]);
   const nowMin = now ? now.getHours() * 60 + now.getMinutes() : 0;
-  const minutesUntilNext = NEXT_MEETING ? NEXT_MEETING.startMinutes - nowMin : 480;
+  const { currentMeeting, nextMeeting } = useMemo(
+    () => getCurrentAndNext(schedule, nowMin),
+    [schedule, nowMin]
+  );
 
-  const status = now ? getRoomStatus(now, ACTIVE_MEETING, NEXT_MEETING) : "available";
+  const status = now ? getRoomStatus(now, currentMeeting, nextMeeting) : "available";
 
   // Determine available-until label
   let statusLabel = "";
   if (status === "available") {
-    statusLabel = NEXT_MEETING
-      ? `Available Until ${NEXT_MEETING.startTime}`
+    statusLabel = nextMeeting
+      ? `Available Until ${nextMeeting.startTime}`
       : "Available All Day";
-  } else if (status === "ending-soon") {
-    statusLabel = `Ending Soon — Free at ${ACTIVE_MEETING.endTime}`;
-  } else {
-    statusLabel = `In Use Until ${ACTIVE_MEETING.endTime}`;
+  } else if (status === "ending-soon" && currentMeeting) {
+    statusLabel = `Ending Soon — Free at ${currentMeeting.endTime}`;
+  } else if (currentMeeting) {
+    statusLabel = `In Use Until ${currentMeeting.endTime}`;
   }
+
+  const minutesUntilNext = nextMeeting ? nextMeeting.startMinutes - nowMin : 480;
+
+  const BOOK_OPTIONS = [15, 30, 45, 60];
 
   const formattedTime = now
     ? now.toLocaleTimeString("en-US", {
@@ -188,12 +158,12 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
         <div className="grid grid-cols-2 gap-4">
           <MeetingCard
             title="Current Meeting"
-            meeting={ACTIVE_MEETING}
+            meeting={currentMeeting}
             emptyText="No meeting in progress"
           />
           <MeetingCard
             title="Up Next"
-            meeting={NEXT_MEETING}
+            meeting={nextMeeting}
             emptyText="No more meetings today"
           />
         </div>
@@ -207,7 +177,7 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
             <QRPanel bookingUrl={bookingUrl} />
           </div>
           <div className="col-span-3">
-            <ScheduleList meetings={SCHEDULE} nowMinutes={nowMin} />
+            <ScheduleList meetings={schedule} nowMinutes={nowMin} />
           </div>
         </div>
       </main>
