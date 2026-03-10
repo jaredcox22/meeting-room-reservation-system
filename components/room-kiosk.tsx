@@ -200,7 +200,7 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
     }
   }
 
-  const disableStart = actionSubmitting || holdActive || !!currentMeeting;
+  const disableStart = actionSubmitting || holdActive || !!currentMeeting || !nextMeeting;
   const disableStop = actionSubmitting || (!currentMeeting && !holdActive);
 
   return (
@@ -238,18 +238,8 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
                 title="Current Meeting"
                 meeting={currentMeeting}
                 emptyText="No meeting in progress"
-                footer={
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="min-h-[40px] flex-1"
-                      onClick={handleStartEarly}
-                      disabled={disableStart}
-                    >
-                      Start early
-                    </Button>
+                footer={currentMeeting ? (
+                  <div className="flex">
                     <Button
                       type="button"
                       size="sm"
@@ -260,12 +250,26 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
                       Stop
                     </Button>
                   </div>
-                }
+                ) : null}
               />
               <MeetingCard
                 title="Up Next"
                 meeting={nextMeeting}
                 emptyText="No more meetings today"
+                footer={
+                  <div className="flex">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="min-h-[40px] flex-1"
+                      onClick={handleStartEarly}
+                      disabled={disableStart}
+                    >
+                      Start early
+                    </Button>
+                  </div>
+                }
               />
             </div>
             {holdError && (
