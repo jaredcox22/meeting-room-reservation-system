@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { signIn, signOut } from "next-auth/react";
+import type { Session } from "next-auth";
 import type { Room } from "@/lib/rooms";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,13 +12,14 @@ import { Spinner } from "@/components/ui/spinner";
 
 const DURATION_OPTIONS = [15, 30, 45, 60] as const;
 
-type SubmitStatus = "idle" | "submitting" | "success" | "error";
+type SubmitStatus = "idle" | "submitting" | "success" | "error" | "conflict" | "unauthorized";
 
 interface BookingFormProps {
   room: Room;
+  session: Session | null;
 }
 
-export function BookingForm({ room }: BookingFormProps) {
+export function BookingForm({ room, session }: BookingFormProps) {
   const [durationMinutes, setDurationMinutes] = useState<number>(30);
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<SubmitStatus>("idle");
@@ -34,9 +37,44 @@ export function BookingForm({ room }: BookingFormProps) {
     });
     if (res.ok) {
       setStatus("success");
+    } else if (res.status === 401) {
+      setStatus("unauthorized");
+    } else if (res.status === 409) {
+      setStatus("conflict");
     } else {
       setStatus("error");
     }
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-background font-sans flex flex-col">
+        <main className="flex-1 px-4 py-8 max-w-md mx-auto w-full flex flex-col justify-center gap-6">
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-sm text-center">
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">
+              {room.name}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-2">
+              Sign in with your Microsoft work account to reserve this room.
+            </p>
+            <Button
+              type="button"
+              size="lg"
+              className="mt-6 min-h-[48px] w-full"
+              onClick={() => signIn("azure-ad", { callbackUrl: `/book/${room.slug}` })}
+            >
+              Sign in with Microsoft
+            </Button>
+            <Link
+              href={room.displayPath}
+              className="mt-4 inline-block text-sm text-muted-foreground hover:text-foreground"
+            >
+              Back to room display
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   if (status === "success") {
@@ -72,6 +110,16 @@ export function BookingForm({ room }: BookingFormProps) {
           <p className="text-sm text-muted-foreground mt-0.5">
             Quick book
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {session.user?.name ?? session.user?.email ?? "Signed in"}{" "}
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="underline hover:text-foreground"
+            >
+              Sign out
+            </button>
+          </p>
         </header>
 
         <p className="text-sm text-muted-foreground mb-6">
@@ -79,6 +127,22 @@ export function BookingForm({ room }: BookingFormProps) {
           to reserve.
         </p>
 
+        {status === "unauthorized" && (
+          <div
+            className="mb-6 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400"
+            role="alert"
+          >
+            Session expired; please sign in again.
+          </div>
+        )}
+        {status === "conflict" && (
+          <div
+            className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            role="alert"
+          >
+            Room is not available for that time. Please choose a shorter duration or try again later.
+          </div>
+        )}
         {status === "error" && (
           <div
             className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"

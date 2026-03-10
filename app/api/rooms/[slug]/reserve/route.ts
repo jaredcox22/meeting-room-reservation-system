@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { getRoomBySlug } from "@/lib/rooms";
+import { getRoomCalendarView, createRoomReservation, isGraphConfigured } from "@/lib/graph";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import type { ReserveRequest, ReserveResponse } from "@/lib/api-types";
 
 const VALID_DURATIONS = [15, 30, 45, 60] as const;
@@ -31,6 +34,15 @@ export async function POST(request: Request, { params }: RouteParams) {
   if (!room) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json(
+      { error: "Sign in required" },
+      { status: 401 }
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -47,6 +59,39 @@ export async function POST(request: Request, { params }: RouteParams) {
       { status: 400 }
     );
   }
-  const response: ReserveResponse = { success: true };
+
+  const now = new Date();
+  const start = new Date(now);
+  const end = new Date(now.getTime() + parsed.durationMinutes * 60 * 1000);
+
+  let eventId: string | undefined;
+  if (isGraphConfigured()) {
+    try {
+      const meetings = await getRoomCalendarView(room.email, start, end);
+      if (meetings.length > 0) {
+        return NextResponse.json(
+          { error: "Room is not available for that time." },
+          { status: 409 }
+        );
+      }
+
+      const result = await createRoomReservation(
+        room.email,
+        start,
+        end,
+        parsed.title ?? "Quick booking",
+        session.user.email
+      );
+      eventId = result.eventId;
+    } catch (err) {
+      console.error("[reserve] createRoomReservation failed:", err);
+      return NextResponse.json(
+        { error: "Could not create reservation. Please try again." },
+        { status: 502 }
+      );
+    }
+  }
+
+  const response: ReserveResponse = { success: true, ...(eventId && { eventId }) };
   return NextResponse.json(response, { status: 201 });
 }

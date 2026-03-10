@@ -6,7 +6,7 @@ This document is a checklist for enabling Microsoft Graph and Entra (Azure AD) a
 
 - **Graph (read):** The app will call Microsoft Graph to get a room mailbox’s calendar view for a time range. That data drives the room display (current meeting, next meeting, today’s schedule) and availability. Implemented in Phase 6 in `lib/graph.ts` (`getRoomCalendarView`, `getRoomAvailability`).
 - **Graph (write):** When a user reserves a room from the booking page, the app will create a calendar event in the room’s mailbox via Graph. Implemented in Phase 7 in `lib/graph.ts` (`createRoomReservation`).
-- **Auth:** Users sign in with their Microsoft work account on the booking page. The app (or server) obtains an access token and uses it for Graph calls. Phase 7 wires `lib/auth.ts` (getAccessToken, login redirect, callback).
+- **Auth:** Users sign in with their Microsoft work account on the booking page. Phase 7 uses **NextAuth.js** with the Azure AD (Entra ID) provider. The redirect URI for the NextAuth callback must be registered in the Entra app (e.g. `https://your-domain.com/api/auth/callback` or `http://localhost:3000/api/auth/callback` for local dev). No new Graph permission is required beyond `Calendars.ReadWrite` (application) when the app creates the event with the app-only token and passes the signed-in user as attendee.
 
 ---
 
@@ -31,10 +31,10 @@ This document is a checklist for enabling Microsoft Graph and Entra (Azure AD) a
 - [ ] Grant **admin consent** if using application permissions.
 - [ ] Reference: [Microsoft Graph calendar permissions](https://learn.microsoft.com/en-us/graph/permissions-reference#calendar-permissions), [access room mailboxes](https://learn.microsoft.com/en-us/graph/room-list).
 
-### 3. Redirect URIs
+### 3. Redirect URIs (Phase 7 NextAuth)
 
 - [ ] In the app registration, go to **Authentication** → **Platform configurations** → **Web** (or SPA if applicable).
-- [ ] Add **Redirect URIs** that match your app exactly (e.g. `https://your-domain.com/api/auth/callback`, or `https://localhost:3000/api/auth/callback` for local dev). Trailing slash and protocol must match.
+- [ ] Add **Redirect URIs** that match your app exactly. For Phase 7 sign-in, include the NextAuth callback URL (e.g. `https://your-domain.com/api/auth/callback`, or `http://localhost:3000/api/auth/callback` for local dev). Trailing slash and protocol must match.
 - [ ] Optional: set **Front-channel logout URL** if you implement logout.
 - [ ] Do not guess tenant-specific domains; use your actual deployment URL and localhost for development.
 
@@ -49,6 +49,7 @@ This document is a checklist for enabling Microsoft Graph and Entra (Azure AD) a
 - [ ] Copy `.env.example` to `.env.local`.
 - [ ] Fill in real values for `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_CLIENT_SECRET`. Do not commit `.env.local`.
 - [ ] Set `MICROSOFT_GRAPH_ENABLED=true` when you are ready to use Graph (Phase 6/7).
+- [ ] For Phase 7 sign-in: set `NEXTAUTH_SECRET` (e.g. `openssl rand -base64 32`) and `NEXTAUTH_URL` (e.g. `http://localhost:3000` in dev, or your production URL).
 - [ ] Optional: set `NEXT_PUBLIC_BASE_URL` (or similar) for building redirect URIs.
 
 ---

@@ -20,6 +20,7 @@ export interface ReserveRequest {
 
 export interface ReserveResponse {
   success: true;
+  eventId?: string;
 }
 
 export interface ApiErrorResponse {

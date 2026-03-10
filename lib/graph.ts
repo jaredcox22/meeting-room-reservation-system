@@ -1,7 +1,7 @@
 /**
  * Microsoft Graph calendar integration.
  * Phase 6: implement getRoomCalendarView / getRoomAvailability using Graph calendar API.
- * Phase 7: implement createRoomReservation and wire auth (getAccessToken, login redirect, callback).
+ * Phase 7: createRoomReservation (app-only token); auth is NextAuth on the booking page.
  */
 
 import type { Meeting } from "@/components/kiosk/types";
@@ -195,17 +195,59 @@ export async function getRoomAvailability(
 
 /**
  * Create a reservation (calendar event) for the room.
- * Phase 7: call Graph API to create event in room calendar.
+ * Uses app-only token; adds organizer as attendee when provided.
  */
 export async function createRoomReservation(
-  _roomEmail: string,
-  _start: Date,
-  _end: Date,
-  _subject?: string,
-  _organizerEmail?: string
+  roomEmail: string,
+  start: Date,
+  end: Date,
+  subject?: string,
+  organizerEmail?: string
 ): Promise<{ success: true; eventId?: string }> {
   if (!isGraphConfigured()) {
     throw new Error(GRAPH_NOT_CONFIGURED);
   }
-  throw new Error(GRAPH_NOT_CONFIGURED);
+
+  const token = await getGraphAccessToken();
+  const encodedEmail = encodeURIComponent(roomEmail);
+  const url = `${GRAPH_BASE}/users/${encodedEmail}/calendar/events`;
+
+  const body: Record<string, unknown> = {
+    subject: subject ?? "Quick booking",
+    start: {
+      dateTime: start.toISOString(),
+      timeZone: "UTC",
+    },
+    end: {
+      dateTime: end.toISOString(),
+      timeZone: "UTC",
+    },
+  };
+
+  if (organizerEmail) {
+    body.attendees = [
+      {
+        emailAddress: { address: organizerEmail },
+        type: "required",
+      },
+    ];
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[graph] createRoomReservation failed:", res.status, text);
+    throw new Error(`[graph] createRoomReservation failed: ${res.status}`);
+  }
+
+  const data = (await res.json()) as { id?: string };
+  return { success: true, eventId: data.id };
 }
