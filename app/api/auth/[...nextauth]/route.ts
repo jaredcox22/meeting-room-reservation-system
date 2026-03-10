@@ -11,12 +11,25 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     redirect({ url, baseUrl }) {
-      if (url === baseUrl || url === baseUrl + "/") {
-        return `${baseUrl}/book/canvass`;
+      const base = baseUrl.replace(/\/$/, "");
+      let returnUrl: string;
+      if (url.startsWith("/")) {
+        returnUrl = `${base}${url}`;
+      } else {
+        try {
+          const parsed = new URL(url);
+          if (parsed.pathname.startsWith("/book/")) {
+            returnUrl = `${base}${parsed.pathname}`;
+          } else if (parsed.origin === new URL(baseUrl).origin) {
+            returnUrl = url;
+          } else {
+            returnUrl = url === baseUrl || url === baseUrl + "/" ? `${base}/` : baseUrl;
+          }
+        } catch {
+          returnUrl = url === baseUrl || url === baseUrl + "/" ? `${base}/` : baseUrl;
+        }
       }
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      if (new URL(url).origin === baseUrl) return url;
-      return baseUrl;
+      return returnUrl;
     },
     jwt({ token, user }) {
       if (user?.email) token.email = user.email;

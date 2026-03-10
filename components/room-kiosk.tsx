@@ -84,15 +84,15 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
   }, [mounted, fetchSchedule]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const base =
-        typeof process.env.NEXT_PUBLIC_APP_URL === "string" &&
-        process.env.NEXT_PUBLIC_APP_URL.length > 0
-          ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
-          : window.location.origin;
-      setBookingUrl(`${base}${room.bookingPath}`);
-    }
-  }, [room.bookingPath]);
+    if (!mounted || typeof window === "undefined") return;
+    const base =
+      typeof process.env.NEXT_PUBLIC_APP_URL === "string" &&
+      process.env.NEXT_PUBLIC_APP_URL.length > 0
+        ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
+        : window.location.origin;
+    const slugFromPath = window.location.pathname.replace(/^\/rooms\/?/, "").split("/")[0] || room.slug;
+    setBookingUrl(`${base}/book/${slugFromPath}`);
+  }, [mounted, room.slug]);
 
   useEffect(() => {
     if (!mounted) return;

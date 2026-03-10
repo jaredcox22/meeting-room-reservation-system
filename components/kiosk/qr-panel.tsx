@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import QRCode from "qrcode";
 
 interface QRPanelProps {
@@ -24,6 +25,14 @@ export function QRPanel({ bookingUrl = null, roomSlug }: QRPanelProps) {
       .then(setDataUrl)
       .catch(() => setDataUrl(null));
   }, [bookingUrl]);
+
+  const canonicalBase =
+    typeof process.env.NEXT_PUBLIC_APP_URL === "string" && process.env.NEXT_PUBLIC_APP_URL.length > 0
+      ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
+      : null;
+  const bookHref =
+    bookingUrl ??
+    (roomSlug && canonicalBase ? `${canonicalBase}/book/${roomSlug}` : roomSlug ? `/book/${roomSlug}` : "#");
 
   return (
     <div className="bg-card rounded-2xl border border-border shadow-sm p-4 sm:p-5 flex flex-col items-center gap-4 h-full min-w-0">
@@ -52,6 +61,15 @@ export function QRPanel({ bookingUrl = null, roomSlug }: QRPanelProps) {
       <p className="text-xs text-center text-muted-foreground leading-relaxed">
         Scan to open this room&apos;s booking page
       </p>
+
+      <Link
+        href={bookHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="w-full rounded-xl py-3 px-4 text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 text-center transition-opacity"
+      >
+        Book now
+      </Link>
     </div>
   );
 }

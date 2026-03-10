@@ -84,6 +84,30 @@ export function BookingForm({ room, session }: BookingFormProps) {
   const dateStr = useMemo(() => toDateString(selectedDate), [selectedDate]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || session) return;
+    const canonical = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
+    if (!canonical) return;
+    try {
+      const canonicalOrigin = new URL(canonical).origin;
+      if (window.location.origin !== canonicalOrigin) {
+        window.location.replace(`${canonicalOrigin}${window.location.pathname}${window.location.search}`);
+      }
+    } catch {
+      // ignore invalid URL
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !session) return;
+    const returnTo = sessionStorage.getItem("booking_return");
+    const pathname = window.location.pathname;
+    if (returnTo?.startsWith("/book/") && returnTo !== pathname) {
+      sessionStorage.removeItem("booking_return");
+      window.location.replace(returnTo);
+    }
+  }, [session]);
+
+  useEffect(() => {
     setAttendeesLoading(true);
     fetch("/api/directory/users")
       .then((res) => (res.ok ? res.json() : { users: [] }))
@@ -188,7 +212,19 @@ export function BookingForm({ room, session }: BookingFormProps) {
               type="button"
               size="lg"
               className="mt-6 min-h-[48px] w-full"
-              onClick={() => signIn("azure-ad", { callbackUrl: `/book/${room.slug}` })}
+              onClick={() => {
+                if (typeof window === "undefined") {
+                  signIn("azure-ad", { callbackUrl: `/book/${room.slug}` });
+                  return;
+                }
+                const pathname = window.location.pathname;
+                const returnTo = pathname.startsWith("/book/")
+                  ? `${window.location.origin}${pathname}`
+                  : `${window.location.origin}/book/${room.slug}`;
+                const stored = pathname.startsWith("/book/") ? pathname : `/book/${room.slug}`;
+                sessionStorage.setItem("booking_return", stored);
+                signIn("azure-ad", { callbackUrl: returnTo });
+              }}
             >
               Sign in with Microsoft
             </Button>
