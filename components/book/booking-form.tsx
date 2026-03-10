@@ -6,6 +6,23 @@ import { signIn, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
 import type { Room } from "@/lib/rooms";
 import type { TimeSlot, SlotsResponse } from "@/lib/api-types";
+
+/** Slots are 15-min blocks. Returns contiguous minutes available from each slot's start. */
+function getContiguousMinutesBySlot(slots: TimeSlot[]): Map<string, number> {
+  const map = new Map<string, number>();
+  const sorted = [...slots].sort((a, b) => a.startMinutes - b.startMinutes);
+  for (let i = 0; i < sorted.length; i++) {
+    const slot = sorted[i]!;
+    let end = slot.endMinutes;
+    let j = i + 1;
+    while (j < sorted.length && sorted[j]!.startMinutes === end) {
+      end = sorted[j]!.endMinutes;
+      j++;
+    }
+    map.set(slot.start, end - slot.startMinutes);
+  }
+  return map;
+}
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +86,7 @@ interface BookingFormProps {
 
 export function BookingForm({ room, session }: BookingFormProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
-  const [slots, setSlots] = useState<TimeSlot[]>([]);
+  const [slotsByDate, setSlotsByDate] = useState<Record<string, TimeSlot[]>>({});
   const [slotsLoading, setSlotsLoading] = useState(true);
   const [slotsError, setSlotsError] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
@@ -120,34 +137,60 @@ export function BookingForm({ room, session }: BookingFormProps) {
   }, []);
 
   useEffect(() => {
+    if (!session) return;
     setSlotsLoading(true);
     setSlotsError(false);
-    setSelectedSlot(null);
-    fetch(`/api/rooms/${room.slug}/slots?date=${dateStr}`)
-      .then((res) => {
-        if (!res.ok) {
-          setSlotsError(true);
-          setSlots([]);
-          return;
+    const base = new Date();
+    const dateStrings: string[] = [];
+    for (let i = 0; i < MAX_DAYS_AHEAD; i++) {
+      const d = new Date(base);
+      d.setDate(d.getDate() + i);
+      dateStrings.push(toDateString(d));
+    }
+    Promise.all(
+      dateStrings.map((dateStr) =>
+        fetch(`/api/rooms/${room.slug}/slots?date=${dateStr}`)
+          .then((res) => (res.ok ? (res.json() as Promise<SlotsResponse>) : { slots: [] }))
+          .then((data) => ({ dateStr, slots: data?.slots ?? [] }))
+          .catch(() => ({ dateStr, slots: [] }))
+      )
+    )
+      .then((results) => {
+        const next: Record<string, TimeSlot[]> = {};
+        for (const { dateStr, slots } of results) {
+          next[dateStr] = slots;
         }
-        return res.json() as Promise<SlotsResponse>;
+        setSlotsByDate((prev) => ({ ...prev, ...next }));
+        setSlotsError(false);
       })
-      .then((data) => {
-        if (data?.slots) setSlots(data.slots);
-        else setSlots([]);
-      })
-      .catch(() => {
-        setSlotsError(true);
-        setSlots([]);
-      })
+      .catch(() => setSlotsError(true))
       .finally(() => setSlotsLoading(false));
-  }, [room.slug, dateStr]);
+  }, [session, room.slug]);
+
+  const slots = useMemo(
+    () => slotsByDate[dateStr] ?? [],
+    [slotsByDate, dateStr]
+  );
 
   const now = useMemo(() => new Date(), []);
   const selectableSlots = useMemo(() => {
     if (!isToday(selectedDate)) return slots;
     return slots.filter((s) => new Date(s.start) > now);
   }, [slots, selectedDate, now]);
+
+  const contiguousBySlot = useMemo(
+    () => getContiguousMinutesBySlot(selectableSlots),
+    [selectableSlots]
+  );
+
+  const hasSlotsForDate = useMemo(() => {
+    return (d: Date) => {
+      const str = toDateString(d);
+      const daySlots = slotsByDate[str] ?? [];
+      if (!isToday(d)) return daySlots.length > 0;
+      return daySlots.some((s) => new Date(s.start) > now);
+    };
+  }, [slotsByDate, now]);
 
   const dateOptions = useMemo(() => {
     const options: Date[] = [];
@@ -320,21 +363,28 @@ export function BookingForm({ room, session }: BookingFormProps) {
               Date
             </Label>
             <div className="mt-2 flex flex-wrap gap-2">
-              {dateOptions.map((d) => (
-                <Button
-                  key={d.getTime()}
-                  type="button"
-                  variant={
-                    toDateString(d) === toDateString(selectedDate) ? "default" : "outline"
-                  }
-                  size="sm"
-                  className="min-h-[40px]"
-                  onClick={() => setSelectedDate(d)}
-                  disabled={status === "submitting"}
-                >
-                  {formatDateLabel(d)}
-                </Button>
-              ))}
+              {dateOptions.map((d) => {
+                const noAvailability = !hasSlotsForDate(d);
+                return (
+                  <Button
+                    key={d.getTime()}
+                    type="button"
+                    variant={
+                      toDateString(d) === toDateString(selectedDate) ? "default" : "outline"
+                    }
+                    size="sm"
+                    className="min-h-[40px]"
+                    onClick={() => {
+                      setSelectedDate(d);
+                      setSelectedSlot(null);
+                    }}
+                    disabled={status === "submitting" || noAvailability}
+                    title={noAvailability ? "No availability" : undefined}
+                  >
+                    {formatDateLabel(d)}
+                  </Button>
+                );
+              })}
             </div>
           </div>
 
@@ -357,19 +407,24 @@ export function BookingForm({ room, session }: BookingFormProps) {
               </p>
             ) : (
               <div className="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {selectableSlots.map((slot) => (
-                  <Button
-                    key={slot.start}
-                    type="button"
-                    variant={selectedSlot?.start === slot.start ? "default" : "outline"}
-                    size="lg"
-                    className="min-h-[44px]"
-                    onClick={() => setSelectedSlot(slot)}
-                    disabled={status === "submitting"}
-                  >
-                    {formatTime12h(new Date(slot.start))}
-                  </Button>
-                ))}
+                {selectableSlots.map((slot) => {
+                  const contiguous = contiguousBySlot.get(slot.start) ?? 0;
+                  const cannotFit = contiguous < durationMinutes;
+                  return (
+                    <Button
+                      key={slot.start}
+                      type="button"
+                      variant={selectedSlot?.start === slot.start ? "default" : "outline"}
+                      size="lg"
+                      className="min-h-[44px]"
+                      onClick={() => setSelectedSlot(slot)}
+                      disabled={status === "submitting" || cannotFit}
+                      title={cannotFit ? `Only ${contiguous} min available from this time` : undefined}
+                    >
+                      {formatTime12h(new Date(slot.start))}
+                    </Button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -379,19 +434,36 @@ export function BookingForm({ room, session }: BookingFormProps) {
               Duration
             </Label>
             <div className="mt-2 grid grid-cols-4 gap-2">
-              {DURATION_OPTIONS.map((min) => (
-                <Button
-                  key={min}
-                  type="button"
-                  variant={durationMinutes === min ? "default" : "outline"}
-                  size="lg"
-                  className="min-h-[44px]"
-                  onClick={() => setDurationMinutes(min)}
-                  disabled={status === "submitting"}
-                >
-                  {min} min
-                </Button>
-              ))}
+              {DURATION_OPTIONS.map((min) => {
+                const selectedContiguous = selectedSlot
+                  ? contiguousBySlot.get(selectedSlot.start) ?? 0
+                  : 0;
+                const noSlotSupports =
+                  !selectedSlot && !selectableSlots.some((s) => (contiguousBySlot.get(s.start) ?? 0) >= min);
+                const exceedsSelectedSlot = !!(selectedSlot && selectedContiguous < min);
+                const durationDisabled =
+                  status === "submitting" || noSlotSupports || exceedsSelectedSlot;
+                return (
+                  <Button
+                    key={min}
+                    type="button"
+                    variant={durationMinutes === min ? "default" : "outline"}
+                    size="lg"
+                    className="min-h-[44px]"
+                    onClick={() => setDurationMinutes(min)}
+                    disabled={durationDisabled}
+                    title={
+                      durationDisabled
+                        ? selectedSlot
+                          ? `Selected time has only ${selectedContiguous} min available`
+                          : "No start time has this much availability"
+                        : undefined
+                    }
+                  >
+                    {min} min
+                  </Button>
+                );
+              })}
             </div>
           </div>
 

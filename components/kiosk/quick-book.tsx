@@ -6,6 +6,23 @@ import { Input } from "@/components/ui/input";
 import { formatTime12h } from "@/lib/time";
 import type { TimeSlot, SlotsResponse } from "@/lib/api-types";
 
+/** Slots are 15-min blocks. Returns contiguous minutes available from each slot's start. */
+function getContiguousMinutesBySlot(slots: TimeSlot[]): Map<string, number> {
+  const map = new Map<string, number>();
+  const sorted = [...slots].sort((a, b) => a.startMinutes - b.startMinutes);
+  for (let i = 0; i < sorted.length; i++) {
+    const slot = sorted[i]!;
+    let end = slot.endMinutes;
+    let j = i + 1;
+    while (j < sorted.length && sorted[j]!.startMinutes === end) {
+      end = sorted[j]!.endMinutes;
+      j++;
+    }
+    map.set(slot.start, end - slot.startMinutes);
+  }
+  return map;
+}
+
 interface DirectoryUser {
   id: string;
   displayName: string;
@@ -49,9 +66,12 @@ export function QuickBook({ roomSlug, options, minutesUntilNext }: QuickBookProp
   const now = useMemo(() => new Date(), []);
   const isToday = selectedDate.getDate() === now.getDate() && selectedDate.getMonth() === now.getMonth() && selectedDate.getFullYear() === now.getFullYear();
   const selectableSlots = useMemo(() => {
-    if (!isToday) return slots;
-    return slots.filter((s) => new Date(s.start) > now);
-  }, [slots, isToday, now]);
+    let list = slots;
+    if (isToday) list = list.filter((s) => new Date(s.start) > now);
+    if (selectedDuration == null) return list;
+    const contiguousBySlot = getContiguousMinutesBySlot(list);
+    return list.filter((s) => (contiguousBySlot.get(s.start) ?? 0) >= selectedDuration);
+  }, [slots, isToday, now, selectedDuration]);
 
   useEffect(() => {
     if (step !== "slot" || !selectedDuration) return;
