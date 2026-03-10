@@ -24,18 +24,19 @@ export function BookingForm({ room }: BookingFormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("submitting");
-
-    // Payload shape for future POST /api/rooms/[slug]/reserve:
-    // { durationMinutes, title: title.trim() || undefined }
-    // Mock submission. Later: replace with:
-    // const res = await fetch(`/api/rooms/${room.slug}/reserve`, {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ durationMinutes, title: title.trim() || undefined }),
-    // });
-    // if (res.ok) setStatus("success"); else setStatus("error");
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setStatus("success");
+    const res = await fetch(`/api/rooms/${room.slug}/reserve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        durationMinutes,
+        title: title.trim() || undefined,
+      }),
+    });
+    if (res.ok) {
+      setStatus("success");
+    } else {
+      setStatus("error");
+    }
   }
 
   if (status === "success") {

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Room } from "@/lib/rooms";
-import { getMockSchedule } from "@/lib/mock-schedule";
 import { StatusCard } from "@/components/kiosk/status-card";
 import { MeetingCard } from "@/components/kiosk/meeting-card";
 import { QuickBook } from "@/components/kiosk/quick-book";
@@ -10,6 +9,7 @@ import { QRPanel } from "@/components/kiosk/qr-panel";
 import { ScheduleList } from "@/components/kiosk/schedule-list";
 import { RefreshIndicator } from "@/components/kiosk/refresh-indicator";
 import type { Meeting, RoomStatus } from "@/components/kiosk/types";
+import type { ScheduleResponse } from "@/lib/api-types";
 
 interface RoomKioskProps {
   room: Room;
@@ -51,46 +51,59 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [bookingUrl, setBookingUrl] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<Meeting[] | null>(null);
+  const [scheduleError, setScheduleError] = useState(false);
 
-  // Initialize on mount to avoid hydration mismatch
+  const fetchSchedule = useCallback(async () => {
+    const res = await fetch(`/api/rooms/${room.slug}/schedule`);
+    if (!res.ok) {
+      setScheduleError(true);
+      return;
+    }
+    setScheduleError(false);
+    const data: ScheduleResponse = await res.json();
+    setSchedule(data.meetings);
+    setLastSynced(new Date());
+  }, [room.slug]);
+
   useEffect(() => {
     setNow(new Date());
     setLastSynced(new Date());
     setMounted(true);
   }, []);
 
-  // Build full booking URL on client for QR panel
+  useEffect(() => {
+    if (!mounted) return;
+    fetchSchedule();
+  }, [mounted, fetchSchedule]);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       setBookingUrl(`${window.location.origin}${room.bookingPath}`);
     }
   }, [room.bookingPath]);
 
-  // Tick clock every second
   useEffect(() => {
     if (!mounted) return;
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, [mounted]);
 
-  function handleRefresh() {
+  async function handleRefresh() {
     setSyncing(true);
-    setTimeout(() => {
-      setLastSynced(new Date());
-      setSyncing(false);
-    }, 1200);
+    await fetchSchedule();
+    setSyncing(false);
   }
 
-  const schedule = useMemo(() => getMockSchedule(room.slug), [room.slug]);
+  const scheduleForDerive = schedule ?? [];
   const nowMin = now ? now.getHours() * 60 + now.getMinutes() : 0;
   const { currentMeeting, nextMeeting } = useMemo(
-    () => getCurrentAndNext(schedule, nowMin),
-    [schedule, nowMin]
+    () => getCurrentAndNext(scheduleForDerive, nowMin),
+    [scheduleForDerive, nowMin]
   );
 
   const status = now ? getRoomStatus(now, currentMeeting, nextMeeting) : "available";
 
-  // Determine available-until label
   let statusLabel = "";
   if (status === "available") {
     statusLabel = nextMeeting
@@ -151,33 +164,43 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
 
       {/* ── Body ── */}
       <main className="flex-1 px-6 pb-4 flex flex-col gap-4 overflow-y-auto">
-        {/* Status Card */}
-        <StatusCard status={status} label={statusLabel} />
+        {scheduleError && (
+          <p className="text-sm text-destructive" role="alert">
+            Could not load schedule. Try refreshing.
+          </p>
+        )}
+        {schedule === null && !scheduleError ? (
+          <p className="text-sm text-muted-foreground">Loading schedule…</p>
+        ) : (
+          <>
+            <StatusCard status={status} label={statusLabel} />
 
-        {/* Meeting Cards */}
-        <div className="grid grid-cols-2 gap-4">
-          <MeetingCard
-            title="Current Meeting"
-            meeting={currentMeeting}
-            emptyText="No meeting in progress"
-          />
-          <MeetingCard
-            title="Up Next"
-            meeting={nextMeeting}
-            emptyText="No more meetings today"
-          />
-        </div>
+            <div className="grid grid-cols-2 gap-4">
+              <MeetingCard
+                title="Current Meeting"
+                meeting={currentMeeting}
+                emptyText="No meeting in progress"
+              />
+              <MeetingCard
+                title="Up Next"
+                meeting={nextMeeting}
+                emptyText="No more meetings today"
+              />
+            </div>
 
-        {/* Quick Book */}
-        <QuickBook options={BOOK_OPTIONS} minutesUntilNext={minutesUntilNext} />
+            <QuickBook options={BOOK_OPTIONS} minutesUntilNext={minutesUntilNext} />
+          </>
+        )}
 
-        {/* QR Code + Schedule side by side on larger screens */}
         <div className="grid grid-cols-5 gap-4">
           <div className="col-span-2">
             <QRPanel bookingUrl={bookingUrl} />
           </div>
           <div className="col-span-3">
-            <ScheduleList meetings={schedule} nowMinutes={nowMin} />
+            <ScheduleList
+              meetings={schedule ?? []}
+              nowMinutes={nowMin}
+            />
           </div>
         </div>
       </main>
