@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: PageProps) {
   if (!room) return {};
   return {
     title: `Book — ${room.name}`,
-    description: `Quick book ${room.name}`,
+    description: `Reserve ${room.name}`,
   };
 }
 

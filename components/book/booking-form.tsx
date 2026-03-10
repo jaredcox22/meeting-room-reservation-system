@@ -34,6 +34,7 @@ interface DirectoryUser {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatTime12h } from "@/lib/time";
 
 const DURATION_OPTIONS = [15, 30, 45, 60] as const;
@@ -96,6 +97,7 @@ export function BookingForm({ room, session }: BookingFormProps) {
   const [attendeesLoading, setAttendeesLoading] = useState(false);
   const [selectedAttendeeEmails, setSelectedAttendeeEmails] = useState<Set<string>>(new Set());
   const [attendeeSearch, setAttendeeSearch] = useState("");
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [status, setStatus] = useState<SubmitStatus>("idle");
 
   const dateStr = useMemo(() => toDateString(selectedDate), [selectedDate]);
@@ -202,6 +204,18 @@ export function BookingForm({ room, session }: BookingFormProps) {
     }
     return options;
   }, []);
+
+  const filteredAttendees = useMemo(() => {
+    const q = attendeeSearch.trim().toLowerCase();
+    return attendees
+      .filter(
+        (u) =>
+          !q ||
+          u.displayName.toLowerCase().includes(q) ||
+          u.mail.toLowerCase().includes(q)
+      )
+      .slice(0, 100);
+  }, [attendees, attendeeSearch]);
 
   function toggleAttendee(email: string) {
     setSelectedAttendeeEmails((prev) => {
@@ -313,9 +327,6 @@ export function BookingForm({ room, session }: BookingFormProps) {
           <h1 className="text-2xl font-bold text-foreground tracking-tight">
             {room.name}
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Quick book
-          </p>
           <p className="text-xs text-muted-foreground mt-1">
             {session.user?.name ?? session.user?.email ?? "Signed in"}{" "}
             <button
@@ -494,50 +505,68 @@ export function BookingForm({ room, session }: BookingFormProps) {
               </p>
             ) : (
               <>
-                <Input
-                  type="search"
-                  placeholder="Search by name or email"
-                  value={attendeeSearch}
-                  onChange={(e) => setAttendeeSearch(e.target.value)}
-                  className="mt-2 min-h-[40px]"
-                  disabled={status === "submitting"}
-                  aria-label="Search invite list by name or email"
-                />
-                <div className="mt-2 max-h-36 overflow-y-auto rounded-lg border border-border p-2 space-y-1">
-                  {attendees
-                    .filter(
-                      (u) =>
-                        !attendeeSearch.trim() ||
-                        u.displayName.toLowerCase().includes(attendeeSearch.trim().toLowerCase()) ||
-                        u.mail.toLowerCase().includes(attendeeSearch.trim().toLowerCase())
-                    )
-                    .slice(0, 100)
-                    .map((u) => {
-                  const isSelected = selectedAttendeeEmails.has(u.mail);
-                  return (
-                    <button
-                      key={u.id}
+                <Popover open={inviteOpen} onOpenChange={setInviteOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
                       type="button"
-                      onClick={() => toggleAttendee(u.mail)}
-                      className={cn(
-                        "w-full rounded-lg px-3 py-2 text-left text-sm flex items-center gap-2",
-                        isSelected ? "bg-primary/15 border border-primary/50" : "hover:bg-muted/50"
-                      )}
+                      variant="outline"
+                      className="mt-2 min-h-[44px] w-full justify-between"
+                      disabled={status === "submitting"}
+                      aria-label="Open invite people list"
                     >
-                      <span
-                        className={cn(
-                          "size-4 rounded border flex shrink-0",
-                          isSelected ? "bg-primary border-primary" : "border-muted-foreground"
-                        )}
-                      />
-                      <span className="truncate">{u.displayName}</span>
-                      <span className="text-muted-foreground text-xs truncate shrink-0 max-w-[140px]">
-                        {u.mail}
+                      <span className="truncate">
+                        {selectedAttendeeEmails.size > 0
+                          ? `${selectedAttendeeEmails.size} selected`
+                          : "Select people to invite"}
                       </span>
-                    </button>
-                  );
-                })}
-                </div>
+                      <span className="text-muted-foreground" aria-hidden="true">
+                        {inviteOpen ? "Close" : "Open"}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-2" align="start">
+                    <Input
+                      type="search"
+                      placeholder="Search by name or email"
+                      value={attendeeSearch}
+                      onChange={(e) => setAttendeeSearch(e.target.value)}
+                      className="min-h-[40px]"
+                      disabled={status === "submitting"}
+                      aria-label="Search invite list by name or email"
+                    />
+                    <div className="mt-2 max-h-60 overflow-y-auto rounded-md border border-border p-1 space-y-1">
+                      {filteredAttendees.length === 0 ? (
+                        <p className="px-2 py-3 text-xs text-muted-foreground">No matches found</p>
+                      ) : (
+                        filteredAttendees.map((u) => {
+                          const isSelected = selectedAttendeeEmails.has(u.mail);
+                          return (
+                            <button
+                              key={u.id}
+                              type="button"
+                              onClick={() => toggleAttendee(u.mail)}
+                              className={cn(
+                                "w-full rounded-lg px-3 py-2 text-left text-sm flex items-center gap-2",
+                                isSelected ? "bg-primary/15 border border-primary/50" : "hover:bg-muted/50"
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "size-4 rounded border flex shrink-0",
+                                  isSelected ? "bg-primary border-primary" : "border-muted-foreground"
+                                )}
+                              />
+                              <span className="truncate">{u.displayName}</span>
+                              <span className="text-muted-foreground text-xs truncate shrink-0 max-w-[140px]">
+                                {u.mail}
+                              </span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </>
             )}
           </div>

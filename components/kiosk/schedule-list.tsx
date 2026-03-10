@@ -28,6 +28,7 @@ function getMeetingStatus(meeting: Meeting, nowMinutes: number): string {
 
 export function ScheduleList({ meetings, nowMinutes }: ScheduleListProps) {
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+  const activeOrUpcomingMeetings = meetings.filter((meeting) => meeting.endMinutes > nowMinutes);
 
   return (
     <>
@@ -36,14 +37,13 @@ export function ScheduleList({ meetings, nowMinutes }: ScheduleListProps) {
           Today&apos;s Schedule
         </p>
 
-        {meetings.length === 0 ? (
+        {activeOrUpcomingMeetings.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">
-            No meetings scheduled today
+            No active or upcoming meetings
           </p>
         ) : (
           <div className="flex flex-col gap-2 min-w-0">
-            {meetings.map((meeting) => {
-              const isPast = meeting.endMinutes < nowMinutes;
+            {activeOrUpcomingMeetings.map((meeting) => {
               const isActive =
                 meeting.startMinutes <= nowMinutes &&
                 meeting.endMinutes > nowMinutes;
@@ -59,8 +59,6 @@ export function ScheduleList({ meetings, nowMinutes }: ScheduleListProps) {
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                     isActive
                       ? "bg-[var(--status-busy-bg)] border border-[var(--status-busy)]/30"
-                      : isPast
-                      ? "opacity-40"
                       : "bg-secondary hover:bg-secondary/80"
                   )}
                   aria-current={isActive ? "true" : undefined}

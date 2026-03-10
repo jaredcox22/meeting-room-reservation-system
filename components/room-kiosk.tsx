@@ -7,7 +7,6 @@ import { MeetingCard } from "@/components/kiosk/meeting-card";
 import { QuickBook } from "@/components/kiosk/quick-book";
 import { QRPanel } from "@/components/kiosk/qr-panel";
 import { ScheduleList } from "@/components/kiosk/schedule-list";
-import { RefreshIndicator } from "@/components/kiosk/refresh-indicator";
 import type { Meeting, RoomStatus } from "@/components/kiosk/types";
 import type { ScheduleResponse } from "@/lib/api-types";
 
@@ -48,8 +47,6 @@ function getRoomStatus(
 export default function RoomKiosk({ room }: RoomKioskProps) {
   const [mounted, setMounted] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
-  const [lastSynced, setLastSynced] = useState<Date | null>(null);
-  const [syncing, setSyncing] = useState(false);
   const [bookingUrl, setBookingUrl] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<Meeting[] | null>(null);
   const [scheduleError, setScheduleError] = useState(false);
@@ -63,12 +60,10 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
     setScheduleError(false);
     const data: ScheduleResponse = await res.json();
     setSchedule(data.meetings);
-    setLastSynced(new Date());
   }, [room.slug]);
 
   useEffect(() => {
     setNow(new Date());
-    setLastSynced(new Date());
     setMounted(true);
   }, []);
 
@@ -99,12 +94,6 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, [mounted]);
-
-  async function handleRefresh() {
-    setSyncing(true);
-    await fetchSchedule();
-    setSyncing(false);
-  }
 
   const scheduleForDerive = schedule ?? [];
   const nowMin = now ? now.getHours() * 60 + now.getMinutes() : 0;
@@ -159,13 +148,6 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
             {formattedTime}
           </p>
           <p className="text-xs sm:text-sm text-muted-foreground">{formattedDate}</p>
-          {lastSynced && (
-            <RefreshIndicator
-              lastSynced={lastSynced}
-              syncing={syncing}
-              onRefresh={handleRefresh}
-            />
-          )}
         </div>
       </header>
 
@@ -200,7 +182,7 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-w-0">
           <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
-            <QRPanel bookingUrl={bookingUrl} roomSlug={room.slug} />
+            <QRPanel bookingUrl={bookingUrl} />
             <QuickBook
               roomSlug={room.slug}
               options={BOOK_OPTIONS}
