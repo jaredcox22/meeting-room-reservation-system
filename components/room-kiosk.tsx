@@ -115,6 +115,16 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
     [scheduleForDerive, nowMin]
   );
 
+  const { displayCurrentMeeting, displayNextMeeting } = useMemo(() => {
+    if (holdActive && nextMeeting) {
+      const meetingAfterNext = scheduleForDerive.find(
+        (m) => m.startMinutes > nextMeeting.startMinutes
+      ) ?? null;
+      return { displayCurrentMeeting: nextMeeting, displayNextMeeting: meetingAfterNext };
+    }
+    return { displayCurrentMeeting: currentMeeting, displayNextMeeting: nextMeeting };
+  }, [holdActive, currentMeeting, nextMeeting, scheduleForDerive]);
+
   const status = holdActive
     ? "busy"
     : now
@@ -201,7 +211,7 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
   }
 
   const disableStart = actionSubmitting || holdActive || !!currentMeeting || !nextMeeting;
-  const disableStop = actionSubmitting || (!currentMeeting && !holdActive);
+  const disableStop = actionSubmitting || !displayCurrentMeeting;
 
   return (
     <div className="min-h-screen bg-background font-sans flex flex-col overflow-x-hidden">
@@ -236,9 +246,9 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <MeetingCard
                 title="Current Meeting"
-                meeting={currentMeeting}
+                meeting={displayCurrentMeeting}
                 emptyText="No meeting in progress"
-                footer={currentMeeting ? (
+                footer={displayCurrentMeeting ? (
                   <div className="flex">
                     <Button
                       type="button"
@@ -254,9 +264,9 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
               />
               <MeetingCard
                 title="Up Next"
-                meeting={nextMeeting}
+                meeting={displayNextMeeting}
                 emptyText="No more meetings today"
-                footer={
+                footer={displayNextMeeting ? (
                   <div className="flex">
                     <Button
                       type="button"
@@ -269,7 +279,7 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
                       Start early
                     </Button>
                   </div>
-                }
+                ) : null}
               />
             </div>
             {holdError && (
