@@ -28,6 +28,23 @@ function formatInTimeZone(date: Date, timeZone: string): string {
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}`;
 }
 
+/** Build a Graph dateTime string for a given date (in TZ) at minutesSinceMidnight (e.g. 570 = 9:30). */
+function formatDateAtMinutes(date: Date, timeZone: string, minutesSinceMidnight: number): string {
+  const f = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour12: false,
+  });
+  const parts = f.formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  const datePart = `${get("year")}-${get("month")}-${get("day")}`;
+  const h = Math.floor(minutesSinceMidnight / 60) % 24;
+  const m = minutesSinceMidnight % 60;
+  return `${datePart}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+}
+
 const TOKEN_URL = (tenantId: string) =>
   `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
@@ -290,11 +307,17 @@ export async function createRoomReservation(
 
 /**
  * End an existing room event "now" by updating its end time.
+ * Sends both start and end so Graph applies the change reliably (room/occurrence).
+ * When ending before the meeting's start (e.g. "started early" then stopped), sets both start and end to now so end >= start.
  */
 export async function endRoomEventNow(
   roomEmail: string,
   eventId: string,
-  now: Date
+  now: Date,
+  /** Meeting start minutes since midnight (room TZ) so we can send unchanged start in PATCH */
+  startMinutes: number,
+  /** Current time minutes since midnight (room TZ); if < startMinutes we set both start and end to now */
+  nowMinutes: number
 ): Promise<{ success: true }> {
   if (!isGraphConfigured()) {
     throw new Error(GRAPH_NOT_CONFIGURED);
@@ -303,21 +326,27 @@ export async function endRoomEventNow(
   const token = await getGraphAccessToken();
   const encodedEmail = encodeURIComponent(roomEmail);
   const encodedEventId = encodeURIComponent(eventId);
-  const url = `${GRAPH_BASE}/users/${encodedEmail}/events/${encodedEventId}`;
   const roomTimeZone = process.env.ROOM_TIMEZONE?.trim() || "America/New_York";
+
+  const endDateTime = formatInTimeZone(now, roomTimeZone);
+  const startDateTime =
+    nowMinutes < startMinutes ? endDateTime : formatDateAtMinutes(now, roomTimeZone, startMinutes);
+
   const body = {
-    end: { dateTime: formatInTimeZone(now, roomTimeZone), timeZone: roomTimeZone },
+    start: { dateTime: startDateTime, timeZone: roomTimeZone },
+    end: { dateTime: endDateTime, timeZone: roomTimeZone },
   };
 
+  const url = `${GRAPH_BASE}/users/${encodedEmail}/calendar/events/${encodedEventId}`;
   const res = await fetch(url, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      Prefer: `outlook.timezone="${roomTimeZone}"`,
     },
     body: JSON.stringify(body),
   });
-
   if (!res.ok) {
     const text = await res.text();
     console.error("[graph] endRoomEventNow failed:", res.status, text);

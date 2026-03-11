@@ -18,13 +18,11 @@ export function getCurrentAndNext(
 }
 
 function getRoomStatus(
-  nowMinutes: number,
+  _nowMinutes: number,
   currentMeeting: Meeting | null,
   _nextMeeting: Meeting | null
 ): RoomStatus {
-  if (!currentMeeting) return "available";
-  if (currentMeeting.endMinutes - nowMinutes <= 15) return "ending-soon";
-  return "busy";
+  return currentMeeting ? "busy" : "available";
 }
 
 function getStatusLabel(
@@ -36,9 +34,6 @@ function getStatusLabel(
     return nextMeeting
       ? `Available Until ${nextMeeting.startTime}`
       : "Available All Day";
-  }
-  if (status === "ending-soon" && currentMeeting) {
-    return `Ending Soon — Free at ${currentMeeting.endTime}`;
   }
   if (currentMeeting) {
     return `In Use Until ${currentMeeting.endTime}`;

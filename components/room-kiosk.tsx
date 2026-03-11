@@ -40,14 +40,11 @@ function getCurrentAndNext(
 }
 
 function getRoomStatus(
-  now: Date,
+  _now: Date,
   active: Meeting | null,
-  next: Meeting | null
+  _next: Meeting | null
 ): RoomStatus {
-  if (!active) return "available";
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  if (active.endMinutes - nowMin <= 15) return "ending-soon";
-  return "busy";
+  return active ? "busy" : "available";
 }
 
 // ─── Root Component ───────────────────────────────────────────────────────────
@@ -146,8 +143,6 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
     statusLabel = nextMeeting
       ? `Available Until ${nextMeeting.startTime}`
       : "Available All Day";
-  } else if (status === "ending-soon" && currentMeeting) {
-    statusLabel = `Ending Soon — Free at ${currentMeeting.endTime}`;
   } else if (currentMeeting) {
     statusLabel = `In Use Until ${currentMeeting.endTime}`;
   }
@@ -198,12 +193,20 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
     setActionSubmitting(true);
     setHoldError(null);
     try {
-      const hasActiveMeeting = !!currentMeeting;
-      const endpoint = hasActiveMeeting
+      // When user "started early", displayCurrentMeeting is the meeting to end (even if not started by clock). Otherwise end the current meeting by time.
+      const meetingToEnd = holdActive ? displayCurrentMeeting : currentMeeting;
+      const hasMeetingToEnd = !!meetingToEnd;
+      const endpoint = hasMeetingToEnd
         ? `/api/rooms/${room.slug}/end-active`
         : `/api/rooms/${room.slug}/hold`;
-      const method = hasActiveMeeting ? "POST" : "DELETE";
-      const res = await fetch(endpoint, { method });
+      const method = hasMeetingToEnd ? "POST" : "DELETE";
+      const body = hasMeetingToEnd
+        ? JSON.stringify({ eventId: meetingToEnd.id })
+        : undefined;
+      const res = await fetch(endpoint, {
+        method,
+        ...(body && { headers: { "Content-Type": "application/json" }, body }),
+      });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
         setHoldError(data.error ?? "Could not stop this room.");

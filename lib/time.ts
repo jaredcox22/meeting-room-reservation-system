@@ -10,6 +10,22 @@ export function minutesSinceMidnight(date: Date): number {
 }
 
 /**
+ * Minutes since midnight in a given IANA timezone (e.g. "America/New_York").
+ * Used to filter schedule to only future/current meetings when room uses that zone.
+ */
+export function minutesSinceMidnightInZone(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+  return hour * 60 + minute;
+}
+
+/**
  * Start and end of the calendar day in local time (00:00:00 and 23:59:59.999).
  * Useful for requesting "today" from Graph calendar view.
  */

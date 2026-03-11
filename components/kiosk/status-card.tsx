@@ -56,31 +56,6 @@ const STATUS_CONFIG = {
     ),
     label: "In Use",
   },
-  "ending-soon": {
-    dot: "bg-[var(--status-ending)]",
-    badge: "bg-[var(--status-ending)]/20 text-foreground border-2 border-[var(--status-ending)]/50",
-    ring: "ring-[var(--status-ending)]",
-    border: "border-[var(--status-ending)]",
-    bg: "bg-[var(--status-ending-bg)]",
-    icon: (
-      <svg
-        className="w-14 h-14 sm:w-16 sm:h-16"
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="12" r="10" className="fill-[var(--status-ending)]" opacity={0.2} />
-        <path
-          d="M12 7v5l3 3"
-          stroke="var(--status-ending)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-    label: "Ending Soon",
-  },
 };
 
 export function StatusCard({ status, label }: StatusCardProps) {

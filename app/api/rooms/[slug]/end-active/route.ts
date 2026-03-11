@@ -18,7 +18,7 @@ function minutesNowInTimeZone(date: Date, timeZone: string): number {
   return hour * 60 + minute;
 }
 
-export async function POST(_request: Request, { params }: RouteParams) {
+export async function POST(request: Request, { params }: RouteParams) {
   const { slug } = await params;
   const room = getRoomBySlug(slug);
   if (!room) {
@@ -36,20 +36,32 @@ export async function POST(_request: Request, { params }: RouteParams) {
   const nowMinutes = minutesNowInTimeZone(now, roomTimeZone);
 
   try {
+    let body: { eventId?: string } = {};
+    try {
+      body = await request.json();
+    } catch {
+      // no body or invalid JSON: find active by time
+    }
     const { start, end } = getDayBounds(now);
     const meetings = await getRoomCalendarView(room.email, start, end);
-    const activeMeeting = meetings.find(
-      (m) => m.startMinutes <= nowMinutes && m.endMinutes > nowMinutes
-    );
-    if (!activeMeeting) {
+    let meetingToEnd =
+      typeof body.eventId === "string"
+        ? meetings.find((m) => m.id === body.eventId)
+        : null;
+    if (!meetingToEnd) {
+      meetingToEnd = meetings.find(
+        (m) => m.startMinutes <= nowMinutes && m.endMinutes > nowMinutes
+      );
+    }
+    if (!meetingToEnd) {
       return NextResponse.json(
         { error: "No active meeting to stop right now." },
         { status: 409 }
       );
     }
-    await endRoomEventNow(room.email, activeMeeting.id, now);
+    await endRoomEventNow(room.email, meetingToEnd.id, now, meetingToEnd.startMinutes, nowMinutes);
     clearHold(slug);
-    return NextResponse.json({ success: true, endedEventId: activeMeeting.id });
+    return NextResponse.json({ success: true, endedEventId: meetingToEnd.id });
   } catch (err) {
     console.error("[end-active] failed:", err);
     return NextResponse.json(

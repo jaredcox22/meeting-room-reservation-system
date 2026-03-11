@@ -1,4 +1,4 @@
-export type RoomStatus = "available" | "busy" | "ending-soon";
+export type RoomStatus = "available" | "busy";
 
 export interface Meeting {
   id: string;
