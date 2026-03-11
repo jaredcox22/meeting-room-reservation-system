@@ -249,17 +249,15 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
                 meeting={displayCurrentMeeting}
                 emptyText="No meeting in progress"
                 footer={displayCurrentMeeting ? (
-                  <div className="flex">
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="min-h-[40px] flex-1"
-                      onClick={handleStopEarly}
-                      disabled={disableStop}
-                    >
-                      Stop
-                    </Button>
-                  </div>
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="min-h-[44px] min-w-[100px] rounded-xl font-semibold shadow-sm"
+                    onClick={handleStopEarly}
+                    disabled={disableStop}
+                  >
+                    Stop
+                  </Button>
                 ) : null}
               />
               <MeetingCard
@@ -267,18 +265,16 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
                 meeting={displayNextMeeting}
                 emptyText="No more meetings today"
                 footer={displayNextMeeting ? (
-                  <div className="flex">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="min-h-[40px] flex-1"
-                      onClick={handleStartEarly}
-                      disabled={disableStart}
-                    >
-                      Start early
-                    </Button>
-                  </div>
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="outline"
+                    className="min-h-[44px] min-w-[120px] rounded-xl font-semibold border-2"
+                    onClick={handleStartEarly}
+                    disabled={disableStart}
+                  >
+                    Start early
+                  </Button>
                 ) : null}
               />
             </div>
@@ -292,12 +288,14 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-w-0">
-          <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
+          <div className="lg:col-span-2 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <QRPanel bookingUrl={bookingUrl} />
             <QuickBook
               roomSlug={room.slug}
               options={BOOK_OPTIONS}
               minutesUntilNext={minutesUntilNext}
+              hasCurrentMeeting={!!displayCurrentMeeting}
+              onBooked={fetchRoomState}
             />
           </div>
           <div className="lg:col-span-3 min-w-0">

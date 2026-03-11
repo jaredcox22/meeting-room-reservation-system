@@ -19,22 +19,22 @@ function hasOverlappingMeeting(meetings: { startMinutes: number; endMinutes: num
 type RouteParams = { params: Promise<{ slug: string }> };
 
 function parseBody(body: unknown): {
-  startTime: string;
+  startTime?: string;
+  startNow?: boolean;
   durationMinutes: number;
   attendeeEmails: string[];
   title?: string;
 } | null {
   if (!body || typeof body !== "object") return null;
   const o = body as Record<string, unknown>;
-  const startTime = typeof o.startTime === "string" ? o.startTime.trim() : undefined;
+  const startTime = typeof o.startTime === "string" ? o.startTime.trim() || undefined : undefined;
+  const startNow = o.startNow === true;
   const durationMinutes = o.durationMinutes;
-  if (
-    !startTime ||
-    typeof durationMinutes !== "number" ||
-    !VALID_DURATIONS.includes(durationMinutes as (typeof VALID_DURATIONS)[number])
-  ) {
+  if (typeof durationMinutes !== "number" || !VALID_DURATIONS.includes(durationMinutes as (typeof VALID_DURATIONS)[number])) {
     return null;
   }
+  if (!startNow && !startTime) return null;
+  if (startNow && startTime) return null;
   let attendeeEmails: string[] = [];
   if (Array.isArray(o.attendeeEmails)) {
     attendeeEmails = o.attendeeEmails.filter(
@@ -47,7 +47,7 @@ function parseBody(body: unknown): {
       : typeof o.title === "string"
         ? o.title.trim() || undefined
         : undefined;
-  return { startTime, durationMinutes, attendeeEmails, title };
+  return { startTime, startNow, durationMinutes, attendeeEmails, title };
 }
 
 function parseAndValidateStartTime(startTime: string): { start: Date } | { error: string } {
@@ -89,16 +89,21 @@ export async function POST(request: Request, { params }: RouteParams) {
   const parsed = parseBody(body);
   if (!parsed) {
     return NextResponse.json(
-      { error: "startTime and durationMinutes (15 or 30) required" },
+      { error: "durationMinutes (15 or 30) and startTime or startNow required" },
       { status: 400 }
     );
   }
 
-  const validated = parseAndValidateStartTime(parsed.startTime);
-  if ("error" in validated) {
-    return NextResponse.json({ error: validated.error }, { status: 400 });
+  let start: Date;
+  if (parsed.startNow) {
+    start = new Date();
+  } else {
+    const validated = parseAndValidateStartTime(parsed.startTime!);
+    if ("error" in validated) {
+      return NextResponse.json({ error: validated.error }, { status: 400 });
+    }
+    start = validated.start;
   }
-  const start = validated.start;
   const end = new Date(start.getTime() + parsed.durationMinutes * 60 * 1000);
 
   if (!isGraphConfigured()) {

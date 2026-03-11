@@ -10,35 +10,41 @@ interface MeetingCardProps {
 
 export function MeetingCard({ title, meeting, emptyText, footer }: MeetingCardProps) {
   return (
-    <div className="bg-card rounded-2xl border border-border shadow-sm p-4 sm:p-5 flex flex-col gap-3 min-w-0">
-      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        {title}
-      </p>
+    <div className="bg-card rounded-2xl border border-border shadow-sm p-4 sm:p-5 flex flex-row gap-4 min-w-0 items-stretch">
+      <div className="flex-1 min-w-0 flex flex-col gap-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          {title}
+        </p>
 
-      {meeting ? (
-        <>
-          <h2 className="text-base sm:text-lg font-semibold text-foreground leading-snug text-balance break-words truncate">
-            {meeting.subject}
-          </h2>
-          <div className="mt-auto flex flex-col gap-1.5 min-w-0">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
-              <PersonIcon />
-              <span className="truncate">{meeting.organizer}</span>
+        {meeting ? (
+          <>
+            <h2 className="text-base sm:text-lg font-semibold text-foreground leading-snug text-balance break-words truncate">
+              {meeting.subject}
+            </h2>
+            <div className="mt-auto flex flex-col gap-1.5 min-w-0">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+                <PersonIcon />
+                <span className="truncate">{meeting.organizer}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <ClockIcon />
+                <span>
+                  {meeting.startTime} — {meeting.endTime}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <ClockIcon />
-              <span>
-                {meeting.startTime} — {meeting.endTime}
-              </span>
-            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center">
+            <p className="text-base text-muted-foreground italic">{emptyText}</p>
           </div>
-        </>
-      ) : (
-        <div className="flex-1 flex items-center">
-          <p className="text-base text-muted-foreground italic">{emptyText}</p>
+        )}
+      </div>
+      {footer ? (
+        <div className="shrink-0 flex flex-col justify-center border-l border-border pl-4">
+          {footer}
         </div>
-      )}
-      {footer ? <div className="pt-1">{footer}</div> : null}
+      ) : null}
     </div>
   );
 }
