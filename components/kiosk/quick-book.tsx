@@ -97,7 +97,7 @@ export function QuickBook({ roomSlug, options, minutesUntilNext, hasCurrentMeeti
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-3">
                 {options.map((min) => {
                   const disabled = min > minutesUntilNext;
                   return (

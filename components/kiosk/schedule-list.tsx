@@ -16,7 +16,7 @@ interface ScheduleListProps {
   nowMinutes: number;
 }
 
-function getMeetingStatus(meeting: Meeting, nowMinutes: number): string {
+export function getMeetingStatus(meeting: Meeting, nowMinutes: number): string {
   if (meeting.startMinutes <= nowMinutes && meeting.endMinutes > nowMinutes) {
     return "Happening now";
   }

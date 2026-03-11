@@ -6,10 +6,17 @@ import { StatusCard } from "@/components/kiosk/status-card";
 import { MeetingCard } from "@/components/kiosk/meeting-card";
 import { QuickBook } from "@/components/kiosk/quick-book";
 import { QRPanel } from "@/components/kiosk/qr-panel";
-import { ScheduleList } from "@/components/kiosk/schedule-list";
+import { ScheduleList, getMeetingStatus } from "@/components/kiosk/schedule-list";
 import type { Meeting, RoomStatus } from "@/components/kiosk/types";
 import type { RoomHoldResponse, ScheduleResponse } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 interface RoomKioskProps {
   room: Room;
@@ -54,6 +61,7 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
   const [holdActive, setHoldActive] = useState(false);
   const [holdError, setHoldError] = useState<string | null>(null);
   const [actionSubmitting, setActionSubmitting] = useState(false);
+  const [selectedMeetingForDetail, setSelectedMeetingForDetail] = useState<Meeting | null>(null);
 
   const fetchRoomState = useCallback(async () => {
     const [scheduleRes, holdRes] = await Promise.all([
@@ -248,10 +256,12 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
                 title="Current Meeting"
                 meeting={displayCurrentMeeting}
                 emptyText="No meeting in progress"
+                onMeetingClick={setSelectedMeetingForDetail}
                 footer={displayCurrentMeeting ? (
                   <Button
                     type="button"
                     size="lg"
+                    variant="destructive"
                     className="min-h-[44px] min-w-[100px] rounded-xl font-semibold shadow-sm"
                     onClick={handleStopEarly}
                     disabled={disableStop}
@@ -264,12 +274,12 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
                 title="Up Next"
                 meeting={displayNextMeeting}
                 emptyText="No more meetings today"
+                onMeetingClick={setSelectedMeetingForDetail}
                 footer={displayNextMeeting ? (
                   <Button
                     type="button"
                     size="lg"
-                    variant="outline"
-                    className="min-h-[44px] min-w-[120px] rounded-xl font-semibold border-2"
+                    className="min-h-[44px] min-w-[120px] rounded-xl font-semibold shadow-sm bg-green-600 text-white hover:bg-green-700"
                     onClick={handleStartEarly}
                     disabled={disableStart}
                   >
@@ -283,6 +293,38 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
                 {holdError}
               </p>
             )}
+
+            <Dialog
+              open={!!selectedMeetingForDetail}
+              onOpenChange={(open) => !open && setSelectedMeetingForDetail(null)}
+            >
+              <DialogContent>
+                {selectedMeetingForDetail && (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle>{selectedMeetingForDetail.subject}</DialogTitle>
+                      <DialogDescription>
+                        {getMeetingStatus(selectedMeetingForDetail, nowMin)}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <dl className="grid gap-2 text-sm">
+                      <div>
+                        <dt className="text-muted-foreground font-medium">Organizer</dt>
+                        <dd className="text-foreground">{selectedMeetingForDetail.organizer}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground font-medium">Start</dt>
+                        <dd className="text-foreground tabular-nums">{selectedMeetingForDetail.startTime}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground font-medium">End</dt>
+                        <dd className="text-foreground tabular-nums">{selectedMeetingForDetail.endTime}</dd>
+                      </div>
+                    </dl>
+                  </>
+                )}
+              </DialogContent>
+            </Dialog>
 
           </>
         )}

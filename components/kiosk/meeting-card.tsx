@@ -6,9 +6,31 @@ interface MeetingCardProps {
   meeting: Meeting | null;
   emptyText: string;
   footer?: ReactNode;
+  /** When set, the meeting content is clickable and opens details */
+  onMeetingClick?: (meeting: Meeting) => void;
 }
 
-export function MeetingCard({ title, meeting, emptyText, footer }: MeetingCardProps) {
+export function MeetingCard({ title, meeting, emptyText, footer, onMeetingClick }: MeetingCardProps) {
+  const meetingContent = meeting ? (
+    <>
+      <h2 className="text-base sm:text-lg font-semibold text-foreground leading-snug text-balance break-words truncate">
+        {meeting.subject}
+      </h2>
+      <div className="mt-auto flex flex-col gap-1.5 min-w-0">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+          <PersonIcon />
+          <span className="truncate">{meeting.organizer}</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <ClockIcon />
+          <span>
+            {meeting.startTime} — {meeting.endTime}
+          </span>
+        </div>
+      </div>
+    </>
+  ) : null;
+
   return (
     <div className="bg-card rounded-2xl border border-border shadow-sm p-4 sm:p-5 flex flex-row gap-4 min-w-0 items-stretch">
       <div className="flex-1 min-w-0 flex flex-col gap-3">
@@ -17,23 +39,18 @@ export function MeetingCard({ title, meeting, emptyText, footer }: MeetingCardPr
         </p>
 
         {meeting ? (
-          <>
-            <h2 className="text-base sm:text-lg font-semibold text-foreground leading-snug text-balance break-words truncate">
-              {meeting.subject}
-            </h2>
-            <div className="mt-auto flex flex-col gap-1.5 min-w-0">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
-                <PersonIcon />
-                <span className="truncate">{meeting.organizer}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <ClockIcon />
-                <span>
-                  {meeting.startTime} — {meeting.endTime}
-                </span>
-              </div>
-            </div>
-          </>
+          onMeetingClick ? (
+            <button
+              type="button"
+              onClick={() => onMeetingClick(meeting)}
+              className="text-left w-full flex flex-col gap-3 flex-1 min-w-0 rounded-lg -m-1 p-1 hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label={`View details for ${meeting.subject}`}
+            >
+              {meetingContent}
+            </button>
+          ) : (
+            meetingContent
+          )
         ) : (
           <div className="flex-1 flex items-center">
             <p className="text-base text-muted-foreground italic">{emptyText}</p>
