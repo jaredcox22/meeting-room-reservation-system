@@ -29,7 +29,6 @@ export function getMeetingStatus(meeting: Meeting, nowMinutes: number): string {
 export function ScheduleList({ meetings, nowMinutes }: ScheduleListProps) {
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const activeOrUpcomingMeetings = meetings.filter((meeting) => meeting.endMinutes > nowMinutes);
-
   return (
     <>
       <div className="bg-card rounded-2xl border border-border shadow-sm p-4 sm:p-5 flex flex-col gap-3 flex-1 min-h-0 min-w-0 overflow-hidden">

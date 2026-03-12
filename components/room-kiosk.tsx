@@ -120,6 +120,32 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
     [scheduleForDerive, nowMin]
   );
 
+  // If we have a "started early" hold but the schedule shows no current/next meeting (e.g. meeting was ended elsewhere or after 409), clear the hold so the status matches the schedule.
+  useEffect(() => {
+    if (
+      !mounted ||
+      !holdActive ||
+      schedule === null ||
+      scheduleError ||
+      currentMeeting !== null ||
+      nextMeeting !== null
+    ) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/rooms/${room.slug}/hold`, { method: "DELETE" });
+        if (res.ok && !cancelled) setHoldActive(false);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted, holdActive, schedule, scheduleError, currentMeeting, nextMeeting, room.slug]);
+
   const { displayCurrentMeeting, displayNextMeeting } = useMemo(() => {
     if (holdActive && nextMeeting) {
       const meetingAfterNext = scheduleForDerive.find(
@@ -210,6 +236,16 @@ export default function RoomKiosk({ room }: RoomKioskProps) {
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
         setHoldError(data.error ?? "Could not stop this room.");
+        // If backend says there's no active meeting to stop (409), clear the "started early" hold
+        // so the UI doesn't stay "In Use" when the schedule is already empty.
+        if (res.status === 409 && holdActive) {
+          try {
+            await fetch(`/api/rooms/${room.slug}/hold`, { method: "DELETE" });
+          } catch {
+            // ignore
+          }
+          setHoldActive(false);
+        }
       } else {
         setHoldActive(false);
       }
