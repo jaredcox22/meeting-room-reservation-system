@@ -17,7 +17,7 @@ class GraphService
         return config('services.azure.client_id')
             && config('services.azure.tenant')
             && config('services.azure.client_secret')
-            && env('MICROSOFT_GRAPH_ENABLED') === 'true';
+            && filter_var(env('MICROSOFT_GRAPH_ENABLED'), FILTER_VALIDATE_BOOLEAN);
     }
 
     public function getAccessToken(): string
