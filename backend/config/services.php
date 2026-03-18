@@ -19,7 +19,7 @@ return [
     'azure' => [
         'client_id' => env('AZURE_CLIENT_ID'),
         'client_secret' => env('AZURE_CLIENT_SECRET'),
-        'redirect' => '/auth/callback',
+        'redirect' => 'https://meetingroom-backend.integrityprodserver.com/auth/callback',
         'tenant' => env('AZURE_TENANT_ID'),
     ],
 
