@@ -81,7 +81,7 @@ export function QuickBook({ roomSlug, options, minutesUntilNext, hasCurrentMeeti
   }
 
   return (
-    <div className="bg-card rounded-2xl border border-border shadow-sm p-4 sm:p-5 min-w-0 flex flex-col">
+    <div className="bg-card rounded-2xl border border-border shadow-sm p-4 sm:p-5 min-w-0 flex flex-col overflow-hidden">
       <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
         Quick Book
       </p>
@@ -144,12 +144,11 @@ export function QuickBook({ roomSlug, options, minutesUntilNext, hasCurrentMeeti
               disabled={step === "submitting"}
             />
           </div>
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-1 w-full min-w-0">
             <Button
               type="button"
               variant="outline"
-              size="lg"
-              className="min-h-[48px] rounded-xl flex-1"
+              className="min-h-[44px] rounded-xl flex-shrink-0 text-sm"
               onClick={handleBack}
               disabled={step === "submitting"}
             >
@@ -157,8 +156,7 @@ export function QuickBook({ roomSlug, options, minutesUntilNext, hasCurrentMeeti
             </Button>
             <Button
               type="button"
-              size="lg"
-              className="min-h-[48px] rounded-xl flex-[2] font-semibold shadow-md hover:shadow-lg"
+              className="min-h-[44px] rounded-xl flex-1 min-w-0 text-sm font-semibold shadow-md hover:shadow-lg"
               onClick={handleSubmit}
               disabled={step === "submitting"}
             >
