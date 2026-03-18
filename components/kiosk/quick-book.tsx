@@ -148,7 +148,7 @@ export function QuickBook({ roomSlug, options, minutesUntilNext, hasCurrentMeeti
             <Button
               type="button"
               variant="outline"
-              className="min-h-[44px] rounded-xl flex-shrink-0 text-sm"
+              className="min-h-[44px] rounded-xl flex-1 min-w-0 text-sm"
               onClick={handleBack}
               disabled={step === "submitting"}
             >
